@@ -1,0 +1,160 @@
+/* ==========================================================================
+   Page layout and responsive switches.
+   ========================================================================== */
+
+.page {
+  width: min(calc(100% - 32px), var(--content-max));
+  margin: 0 auto;
+  padding: 2rem 0 4rem;
+}
+
+.site-footer {
+  width: min(calc(100% - 32px), var(--content-max));
+  margin: 0 auto;
+  padding: 2rem 0 6rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+/* ---------- Hero -------------------------------------------------------- */
+.hero {
+  display: grid;
+  gap: 0.875rem;
+  max-width: 60ch;
+  padding: 1rem 0 2.5rem;
+}
+
+.hero h1 {
+  font-size: clamp(1.75rem, 1.2rem + 2.2vw, 2.75rem);
+  letter-spacing: -0.02em;
+}
+
+.hero p {
+  color: var(--text-muted);
+  font-size: 1.0625rem;
+}
+
+.hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.625rem;
+  margin-top: 0.5rem;
+}
+
+/* ---------- Filter rail ------------------------------------------------- */
+.filter-rail {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+  margin-bottom: 1.25rem;
+  scrollbar-width: none;
+}
+
+.filter-rail::-webkit-scrollbar {
+  display: none;
+}
+
+/* ==========================================================================
+   Breakpoints.
+
+   The mobile tab bar and the desktop pill are mutually exclusive - rendering
+   both would put two glass surfaces on screen for no reason, and the blur
+   budget (max 3 layers) is not something to spend carelessly.
+   ========================================================================== */
+@media (max-width: 767px) {
+  .nav-only-desktop {
+    display: none !important;
+  }
+
+  .glass-navbar {
+    top: 8px;
+    margin-top: 8px;
+    width: calc(100% - 20px);
+  }
+
+  .nav-inner {
+    padding-left: 0.875rem;
+  }
+
+  /* Clear the fixed tab bar. */
+  .site-footer {
+    padding-bottom: calc(var(--tabbar-h) + 2.5rem);
+  }
+}
+
+@media (min-width: 768px) {
+  .glass-tabbar {
+    display: none;
+  }
+}
+
+/* ---------- Kitchen sink (development only) ----------------------------- */
+.ks-section {
+  padding: 1.5rem 0 0.5rem;
+  border-top: 1px solid var(--border);
+  margin-top: 2rem;
+}
+
+.ks-section:first-of-type {
+  border-top: 0;
+  margin-top: 0;
+}
+
+.ks-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.625rem;
+  margin: 0.875rem 0;
+}
+
+.ks-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-subtle);
+  margin-bottom: 0.5rem;
+}
+
+.ks-swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 0.5rem;
+}
+
+.ks-swatch {
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  font-size: 0.6875rem;
+}
+
+.ks-swatch__chip {
+  height: 44px;
+}
+
+.ks-swatch__name {
+  padding: 0.35rem 0.5rem;
+  color: var(--text-muted);
+  background: var(--surface);
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+/* A photographic backdrop, so glass is judged against the worst case it will
+   actually face rather than a flat mock (plan.md 15). */
+.ks-glass-stage {
+  position: relative;
+  padding: 2rem;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 18% 22%, oklch(0.72 0.14 28 / 0.85), transparent 46%),
+    radial-gradient(circle at 82% 30%, oklch(0.68 0.15 250 / 0.85), transparent 48%),
+    radial-gradient(circle at 50% 88%, oklch(0.75 0.16 145 / 0.8), transparent 52%),
+    linear-gradient(140deg, oklch(0.55 0.1 300), oklch(0.7 0.12 60));
+}

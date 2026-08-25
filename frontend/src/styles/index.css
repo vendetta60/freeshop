@@ -1,0 +1,53 @@
+/* Single stylesheet entry point. Order matters: tokens define the variables
+   that everything else consumes, Tailwind's layers come next, then our base. */
+
+@import './fonts.css';
+@import './tokens.css';
+
+@import 'tailwindcss';
+
+@import './base.css';
+@import './layout.css';
+@import './components.css';
+@import './glass.css';
+@import './overlays.css';
+@import './auth.css';
+@import './admin.css';
+
+/* Expose the design tokens to Tailwind utilities so `bg-surface`,
+   `text-muted`, `rounded-lg` and friends resolve to the same variables the
+   plain CSS uses. One palette, two ways to reach it - never two palettes. */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-text-subtle: var(--text-subtle);
+  --color-text-inverse: var(--text-inverse);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-active: var(--accent-active);
+  --color-accent-subtle: var(--accent-subtle);
+  --color-accent-border: var(--accent-border);
+  --color-on-accent: var(--on-accent);
+
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+
+  --radius-xs: var(--r-xs);
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+  --radius-xl: var(--r-xl);
+  --radius-full: var(--r-full);
+
+  --font-sans: 'Inter Variable', 'Inter', system-ui, sans-serif;
+}

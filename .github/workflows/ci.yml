@@ -1,0 +1,145 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (lint, types, tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Ruff (lint)
+        run: ruff check .
+
+      - name: Ruff (format)
+        run: ruff format --check .
+
+      - name: Mypy (strict)
+        run: mypy app
+
+      - name: Pytest
+        run: pytest --cov=app --cov-report=term-missing
+
+      - name: Migrations are reversible
+        run: |
+          alembic upgrade head
+          alembic downgrade base
+        env:
+          DATABASE_URL: sqlite+aiosqlite:///./data/ci.db
+
+  frontend:
+    name: Frontend (lint, types, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Prettier
+        run: npm run format:check
+
+      - name: TypeScript
+        run: npm run typecheck
+
+      # A key present in one language file and not the other is invisible
+      # until someone switches language and finds a raw key on screen
+      # (plan.md 7.1).
+      - name: i18n key parity
+        run: npm run i18n:check
+
+      - name: Build
+        run: npm run build
+
+      - name: Unit tests
+        run: npm test
+
+      # Enforces the plan.md 11 budget rather than trusting it. A regression
+      # here fails the build instead of being noticed at the demo.
+      - name: Bundle budget (initial JS <= 120 kB gzip, CSS <= 20 kB)
+        run: node scripts/check-bundle-budget.mjs
+
+  brand:
+    name: Brand layer is not hardcoded
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+
+      # Renames the project to a nonsense string and asserts everything still
+      # builds and the old name appears nowhere. This is the test that keeps
+      # the rebrand cheap (plan.md 3.0, W3).
+      - name: Rename and rebuild
+        run: |
+          sed -i "s/BRAND_NAME = 'FreeShop'/BRAND_NAME = 'ZzQqTestBrand'/" src/brand/brand.config.ts
+          npm run brand:assets   # manifest.webmanifest is a derived artifact
+          npm run build
+          if grep -rIl --exclude-dir=node_modules 'FreeShop' dist/; then
+            echo "::error::The old brand name survived a rename - a literal is hardcoded outside src/brand/."
+            exit 1
+          fi
+          echo "Rebrand check passed."
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: npm audit
+        run: npm audit --audit-level=high
+        working-directory: frontend
+      - name: pip-audit
+        run: |
+          python -m pip install --upgrade pip pip-audit
+          pip install -e ".[dev]"
+          pip-audit --strict --desc
+        working-directory: backend

@@ -1,0 +1,42 @@
+[
+  {
+    "src": "/demo/p1.webp",
+    "width": 3000,
+    "height": 2000
+  },
+  {
+    "src": "/demo/p2.webp",
+    "width": 800,
+    "height": 1600
+  },
+  {
+    "src": "/demo/p3.webp",
+    "width": 1000,
+    "height": 1000
+  },
+  {
+    "src": "/demo/p4.webp",
+    "width": 2400,
+    "height": 1600
+  },
+  {
+    "src": "/demo/p5.webp",
+    "width": 900,
+    "height": 1350
+  },
+  {
+    "src": "/demo/p6.webp",
+    "width": 400,
+    "height": 400
+  },
+  {
+    "src": "/demo/p7.webp",
+    "width": 1800,
+    "height": 1200
+  },
+  {
+    "src": "/demo/p8.webp",
+    "width": 1200,
+    "height": 1600
+  }
+]

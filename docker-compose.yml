@@ -1,0 +1,134 @@
+# =============================================================================
+#  FreeShop - local production stack (plan.md 12.3)
+#
+#    docker compose up -d --build      -> http://localhost
+#
+#  Two running services. The frontend has no runtime: it is built once and the
+#  static output is served by Caddy.
+#
+#  WARNING: the named volumes below hold the entire state of the shop - the
+#  SQLite database and every uploaded product image. `docker compose down -v`
+#  erases them. Use `down` without `-v`.
+# =============================================================================
+
+services:
+  api:
+    build:
+      context: ./backend
+    image: freeshop-api:local
+    restart: unless-stopped
+    environment:
+      ENV: production
+      APP_NAME: ${APP_NAME:-FreeShop}
+      REQUEST_PREFIX: ${REQUEST_PREFIX:-SR}
+      API_BASE_URL: ${PUBLIC_URL:-http://localhost:8080}
+      FRONTEND_URL: ${PUBLIC_URL:-http://localhost:8080}
+      CORS_ORIGINS: ${PUBLIC_URL:-http://localhost:8080}
+      DATABASE_URL: sqlite+aiosqlite:///./data/freeshop.db
+      UPLOAD_DIR: ./static/uploads
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env - openssl rand -hex 32}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      # DEMO_MODE lets the console OTP channel run under ENV=production, which
+      # is what makes sign-in demonstrable on a local stack with no Google
+      # credentials and no SMS gateway. Startup logs a loud warning. Turn it
+      # off (and wire a real channel) for anything internet-reachable.
+      DEMO_MODE: ${DEMO_MODE:-true}
+      AUTH_PHONE_ENABLED: ${AUTH_PHONE_ENABLED:-true}
+      OTP_CHANNEL: ${OTP_CHANNEL:-console}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      SEED_ON_START: ${SEED_ON_START:-false}
+      SEED_TIER: ${SEED_TIER:-minimal}
+    volumes:
+      - freeshop_data:/app/data
+      - freeshop_uploads:/app/static/uploads
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://127.0.0.1:8000/api/v1/healthz']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+  web-build:
+    build:
+      context: ./frontend
+      target: build
+      args:
+        VITE_API_URL: /api/v1
+        VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+        VITE_DEFAULT_LANG: az
+        VITE_AUTH_PHONE_ENABLED: ${AUTH_PHONE_ENABLED:-true}
+    image: freeshop-web-build:local
+    # Build-only. It produces /app/dist, which caddy mounts, then exits.
+    # Clear before copying: filenames are content-hashed, so without this the
+    # volume accumulates every chunk from every past build and grows forever.
+    # /out holds build artefacts only - never data - so wiping it is safe.
+    command:
+      ['sh', '-c', 'rm -rf /out/* /out/.[!.]* 2>/dev/null; cp -r /app/dist/. /out/ && echo "web bundle exported"']
+    volumes:
+      - freeshop_web:/out
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      # Host port is configurable: on Windows, port 80 is frequently held by a
+      # system service (IIS / http.sys), so 8080 is the safer default.
+      - '${HTTP_PORT:-8080}:80'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - freeshop_web:/srv/www:ro
+      - freeshop_uploads:/srv/uploads:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+      web-build:
+        condition: service_completed_successfully
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+  # Opt-in: `docker compose --profile backup run --rm backup`
+  # Uses sqlite3 .backup - the only safe way to copy a live WAL database.
+  backup:
+    image: freeshop-api:local
+    profiles: ['backup']
+    entrypoint: ['/bin/sh', '-c']
+    command:
+      - |
+        set -eu
+        STAMP=$$(date +%Y%m%d-%H%M%S)
+        mkdir -p /backups
+        sqlite3 /app/data/freeshop.db ".backup '/backups/db-$$STAMP.sqlite'"
+        tar czf /backups/uploads-$$STAMP.tar.gz -C /app/static uploads
+        ls -1t /backups/db-*.sqlite      | tail -n +8 | xargs -r rm --
+        ls -1t /backups/uploads-*.tar.gz | tail -n +8 | xargs -r rm --
+        echo "backup complete: $$STAMP"
+    volumes:
+      - freeshop_data:/app/data:ro
+      - freeshop_uploads:/app/static/uploads:ro
+      - ./backups:/backups
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  freeshop_data:
+  freeshop_uploads:
+  freeshop_web:
+  caddy_data:
+  caddy_config:

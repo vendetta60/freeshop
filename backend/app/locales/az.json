@@ -1,0 +1,25 @@
+{
+  "INTERNAL_ERROR": "Serverdə gözlənilməz xəta baş verdi",
+  "NOT_FOUND": "Tapılmadı",
+  "VALIDATION_ERROR": "Daxil edilən məlumat düzgün deyil",
+  "RATE_LIMITED": "Çox sayda sorğu göndərildi, bir az sonra yenidən cəhd edin",
+  "PAYLOAD_TOO_LARGE": "Göndərilən fayl həddindən artıq böyükdür",
+
+  "UNAUTHORIZED": "Bu əməliyyat üçün daxil olmalısınız",
+  "FORBIDDEN": "Bu əməliyyat üçün icazəniz yoxdur",
+  "TOKEN_EXPIRED": "Sessiyanın vaxtı bitib, yenidən daxil olun",
+  "TOKEN_INVALID": "Sessiya etibarsızdır, yenidən daxil olun",
+  "REFRESH_REUSED": "Təhlükəsizlik səbəbindən bütün sessiyalar bağlandı, yenidən daxil olun",
+  "GOOGLE_NOT_CONFIGURED": "Google ilə giriş hələ konfiqurasiya edilməyib",
+  "GOOGLE_TOKEN_INVALID": "Google hesabı təsdiqlənə bilmədi",
+  "PHONE_AUTH_DISABLED": "Nömrə ilə giriş deaktivdir",
+  "PHONE_NOT_VERIFIED": "Davam etmək üçün telefon nömrənizi təsdiqləyin",
+  "OTP_INVALID": "Kod yanlışdır",
+  "OTP_EXPIRED": "Kodun vaxtı bitib, yeni kod tələb edin",
+  "OTP_TOO_MANY_ATTEMPTS": "Çox sayda yanlış cəhd, yeni kod tələb edin",
+
+  "CART_EMPTY": "Səbətiniz boşdur",
+  "PRODUCT_UNAVAILABLE": "Seçdiyiniz məhsullardan biri artıq mövcud deyil",
+  "CATEGORY_NOT_EMPTY": "Kateqoriyada məhsul və ya alt-kateqoriya var, əvvəlcə onları köçürün",
+  "UPLOAD_REJECTED": "Fayl qəbul edilmədi"
+}

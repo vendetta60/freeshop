@@ -1,0 +1,159 @@
+/* ==========================================================================
+   Liquid Glass - the implementation contract (plan.md 3.5)
+
+   Three tiers, chosen at runtime by useGlassTier():
+     A  full glass    backdrop-filter supported, transparency not reduced
+     B  reduced       prefers-reduced-transparency, or blur budget exceeded
+     C  none          no backdrop-filter support
+
+   HARD RULES - violating these is what makes glass UIs janky:
+     * max 3 backdrop-filter layers composited at once
+     * NEVER on a list item, card, or anything inside a scroll container
+     * allowed on exactly: top nav, mobile tab bar, drawer, modal/sheet,
+       toast, command palette, sticky filter bar
+     * animate transform and opacity only - never backdrop-filter or blur()
+     * will-change only while actually animating
+   ========================================================================== */
+
+.glass {
+  position: relative;
+  background: var(--glass-tint);
+  border: 1px solid var(--glass-hairline);
+  border-radius: var(--r-lg);
+  box-shadow:
+    var(--glass-shadow),
+    inset 0 1px 0 0 var(--glass-edge);
+  isolation: isolate;
+  /* NO `contain: paint` on the base class.
+     It clips descendants to the element's own box, which silently broke every
+     dropdown anchored inside the nav pill: the menu rendered in the DOM but
+     was painted-clipped and not hit-testable, so clicks landed on <main>.
+     Containment is applied per-surface below, only where nothing escapes. */
+}
+
+/* Surfaces with no overflowing children keep the containment benefit. */
+.glass-tabbar,
+.drawer,
+.palette,
+.auth-sheet,
+.glass-toast {
+  contain: paint;
+}
+
+/* ---- Tier A: the real thing ------------------------------------------- */
+[data-glass='full'] .glass {
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+
+/* ---- Tier B: same silhouette, zero compositing cost -------------------- */
+[data-glass='reduced'] .glass {
+  background: var(--glass-tint-deep);
+}
+
+/* ---- Tier C: solid ----------------------------------------------------- */
+[data-glass='none'] .glass {
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+/* Deeper tint for surfaces that sit over arbitrary product photography.
+   Contrast must hold against the WORST-CASE backdrop, not a flat mock -
+   this is the single most common way glass UIs fail WCAG (plan.md 15). */
+.glass--deep {
+  background: var(--glass-tint-deep);
+}
+
+/* The specular rim. A single low-opacity white gradient across the top edge,
+   which is what reads as "lit glass" rather than "translucent panel". */
+.glass--specular::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    160deg,
+    color-mix(in oklab, white 38%, transparent),
+    transparent 42%,
+    transparent 60%,
+    color-mix(in oklab, white 10%, transparent)
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+:root[data-theme='dark'] .glass--specular::before,
+:root:not([data-theme='light']) .glass--specular::before {
+  background: linear-gradient(
+    160deg,
+    color-mix(in oklab, white 16%, transparent),
+    transparent 42%,
+    transparent 60%,
+    color-mix(in oklab, white 4%, transparent)
+  );
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) .glass--specular::before {
+    background: linear-gradient(
+      160deg,
+      color-mix(in oklab, white 38%, transparent),
+      transparent 42%,
+      transparent 60%,
+      color-mix(in oklab, white 10%, transparent)
+    );
+  }
+}
+
+/* ==========================================================================
+   Allowed glass surfaces. Named explicitly so the rule is enforceable by
+   reading the stylesheet - if a selector is not here, it does not get glass.
+   ========================================================================== */
+
+/* Desktop: a floating pill, inset from the viewport - not a full-bleed band. */
+.glass-navbar {
+  position: sticky;
+  top: 12px;
+  z-index: 30;
+  margin: 12px auto 0;
+  width: min(calc(100% - 32px), var(--content-max));
+  border-radius: var(--r-full);
+}
+
+/* Mobile: an iOS-style tab bar honouring the home-indicator inset. */
+.glass-tabbar {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 30;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  border-bottom: 0;
+}
+
+.glass-sheet {
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+}
+
+.glass-toast {
+  border-radius: var(--r-md);
+}
+
+/* ==========================================================================
+   Scroll containers must never contain a glass surface. This is a guard, not
+   decoration: an accidental `.glass` inside a scroller is a guaranteed
+   frame-rate bug on mid-range Android, so make it loud in development.
+   ========================================================================== */
+@media (scripting: enabled) {
+  [data-glass-forbidden] .glass {
+    outline: 3px dashed var(--danger);
+    outline-offset: 4px;
+  }
+}

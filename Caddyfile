@@ -1,0 +1,87 @@
+# =============================================================================
+#  FreeShop - Caddy config for the local Docker stack (plan.md 12.3)
+#
+#  Serves the SPA, proxies the API, and serves uploaded images.
+#  Runs on plain HTTP at http://localhost - there is no domain and no ACME.
+#
+#  To go public later, replace `http://localhost` with the real hostname and
+#  Caddy obtains and renews a certificate automatically. Nothing else changes.
+#  For a local padlock instead, use `localhost` with `tls internal` - but that
+#  shows a browser warning unless Caddy's CA is trusted, which usually reads
+#  worse on a projector than plain HTTP.
+# =============================================================================
+
+{
+	admin off
+	auto_https off
+}
+
+:80 {
+	# Bind by port, not hostname: the container always listens on 80 while the
+	# host port is configurable (HTTP_PORT), so a hostname-matched site block
+	# would fail to match "localhost:8080".
+	encode zstd gzip
+
+	# --- API -----------------------------------------------------------------
+	handle /api/* {
+		reverse_proxy api:8000 {
+			header_up X-Real-IP {remote_host}
+		}
+	}
+
+	# --- Uploaded product images --------------------------------------------
+	# Content-hashed filenames, so they can be cached indefinitely.
+	handle_path /static/uploads/* {
+		root * /srv/uploads
+		header Cache-Control "public, max-age=31536000, immutable"
+		header X-Content-Type-Options "nosniff"
+		# Images are displayed, never executed or offered as a download.
+		header Content-Disposition "inline"
+		file_server {
+			hide .*
+		}
+	}
+
+	# --- SPA -----------------------------------------------------------------
+	handle {
+		root * /srv/www
+
+		# Hashed asset filenames are immutable. Vite emits `name-HASH.ext`
+		# with a DASH before the hash, not a dot - matching on `.HASH.` never
+		# fires and silently disables asset caching.
+		@hashed path_regexp ^/assets/.+-[0-9a-zA-Z_-]{8,}\.(js|css|woff2|png|jpg|svg|avif|webp)$
+		header @hashed Cache-Control "public, max-age=31536000, immutable"
+
+		# ...but index.html must never be cached, or a deploy is invisible
+		# until the browser decides to revalidate.
+		@html path /index.html /
+		header @html Cache-Control "no-cache"
+
+		header {
+			X-Content-Type-Options "nosniff"
+			X-Frame-Options "DENY"
+			Referrer-Policy "strict-origin-when-cross-origin"
+			Permissions-Policy "geolocation=(), camera=(), microphone=()"
+			# img-src includes the Unsplash CDN because the phase-1 demo data
+			# hotlinks real product photography. Once the phase-3 seed stores
+			# uploads locally (or `npm run demo:fetch` localises them), drop
+			# https://images.unsplash.com and tighten this back to 'self'.
+			Content-Security-Policy "default-src 'self'; img-src 'self' data: blob: https://images.unsplash.com; script-src 'self' 'unsafe-inline' https://accounts.google.com; frame-src https://accounts.google.com; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self' https://accounts.google.com; object-src 'none'; base-uri 'self'; form-action 'self'"
+			-Server
+		}
+
+		# Client-side routing: unknown paths fall back to the app shell.
+		try_files {path} /index.html
+		file_server
+	}
+
+	# 10 MB request cap, matching the API (plan.md 10).
+	request_body {
+		max_size 10MB
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

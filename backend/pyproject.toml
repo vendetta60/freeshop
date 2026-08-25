@@ -1,0 +1,114 @@
+[project]
+name = "freeshop-api"
+version = "0.1.0"
+description = "FreeShop - product catalogue & contact platform API"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.141.1",
+    "uvicorn[standard]>=0.52.4",
+    "pydantic>=2.13.4",
+    "pydantic-settings>=2.15.0",
+    "sqlalchemy>=2.0.52",
+    "aiosqlite>=0.22.1",
+    "alembic>=1.19.1",
+    "pyjwt>=2.13.0",
+    "argon2-cffi>=25.1.0",
+    # [requests] extra, not bare google-auth: google.auth.transport.requests
+    # imports the requests package and raises ImportError without it. The dev
+    # venv had it transitively, so this only surfaced in a clean Docker image.
+    "google-auth[requests]>=2.56.3",
+    "pillow>=12.3.0",
+    "slowapi>=0.1.10",
+    "structlog>=26.1.0",
+    "httpx>=0.28.1",
+    "python-multipart>=0.0.20",
+    "email-validator>=2.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=6.0.0",
+    "ruff>=0.16.4",
+    "mypy>=2.3.1",
+    "pip-audit>=2.7.3",
+]
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.setuptools.package-data]
+app = ["locales/*.json"]
+
+# ---------------------------------------------------------------------------
+# Ruff - lint + format. Replaces black, isort, flake8, pyupgrade.
+# ---------------------------------------------------------------------------
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["app", "tests", "seeds"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",    # pycodestyle
+    "F",         # pyflakes
+    "I",         # isort
+    "N",         # pep8-naming
+    "UP",        # pyupgrade
+    "B",         # bugbear
+    "A",         # builtins shadowing
+    "C4",        # comprehensions
+    "DTZ",       # naive datetimes - matters for plan.md 8.1 deterministic seeds
+    "T20",       # no print() - use structlog
+    "SIM",       # simplify
+    "RUF",       # ruff-specific
+    "ASYNC",     # async correctness
+    "S",         # bandit security
+]
+ignore = [
+    "S101",   # assert - used legitimately in tests
+    "B008",   # function call in default arg - this is how FastAPI Depends() works
+    # Azerbaijani is a first-class language in this codebase. RUF001-003 flag
+    # letters such as ə ı ğ ş as "ambiguous unicode"; here they are simply correct.
+    "RUF001", "RUF002", "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S105", "S106"]          # hardcoded test secrets are fine
+# S105 matches any name containing TOKEN/SECRET. These are error-code enum
+# members and a documented placeholder, not credentials.
+"app/core/errors.py" = ["S105"]
+"app/config.py" = ["S105"]
+"seeds/*" = ["S311", "T20"]           # non-crypto RNG + CLI output are the point
+"alembic/versions/*" = ["E501", "N999"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+# ---------------------------------------------------------------------------
+# Mypy - strict on app/ (plan.md 16, DoD item 9)
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+plugins = ["pydantic.mypy"]
+exclude = ["^alembic/", "^tests/", "^seeds/"]
+
+[[tool.mypy.overrides]]
+module = ["slowapi.*", "google.*"]
+ignore_missing_imports = true
+
+# ---------------------------------------------------------------------------
+# Pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+filterwarnings = ["error::DeprecationWarning"]

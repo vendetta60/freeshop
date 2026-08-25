@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="%BRAND_LANG%">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+
+    <!-- Every %BRAND_*% token is filled at build time from src/brand/brand.config.ts
+         by the brandHtmlPlugin in vite.config.ts. Do not hardcode the name here. -->
+    <title>%BRAND_NAME%</title>
+    <meta name="description" content="%BRAND_DESCRIPTION%" />
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <!-- Matches the token palette so the browser chrome does not flash white
+         on a dark device during first paint. -->
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#fbfbfc" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1c1d21" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="%BRAND_NAME%" />
+    <meta property="og:title" content="%BRAND_NAME%" />
+    <meta property="og:description" content="%BRAND_DESCRIPTION%" />
+    <meta property="og:image" content="/og-image.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <script>
+      // Applies the stored theme and accent BEFORE first paint. Without this
+      // the page renders light for a frame and then flips - the flash of
+      // wrong theme. Deliberately inline and tiny; it must not wait on JS.
+      (function () {
+        try {
+          var t = localStorage.getItem('ui:theme');
+          var a = localStorage.getItem('ui:accent');
+          if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+          if (a === 'bronze') document.documentElement.dataset.accent = a;
+        } catch (e) {
+          /* private mode - fall back to system preference */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

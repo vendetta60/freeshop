@@ -1,0 +1,25 @@
+{
+  "INTERNAL_ERROR": "An unexpected server error occurred",
+  "NOT_FOUND": "Not found",
+  "VALIDATION_ERROR": "The submitted data is not valid",
+  "RATE_LIMITED": "Too many requests, please try again shortly",
+  "PAYLOAD_TOO_LARGE": "The uploaded file is too large",
+
+  "UNAUTHORIZED": "You need to sign in to do that",
+  "FORBIDDEN": "You do not have permission to do that",
+  "TOKEN_EXPIRED": "Your session has expired, please sign in again",
+  "TOKEN_INVALID": "Your session is invalid, please sign in again",
+  "REFRESH_REUSED": "All sessions were closed for security reasons, please sign in again",
+  "GOOGLE_NOT_CONFIGURED": "Google sign-in is not configured yet",
+  "GOOGLE_TOKEN_INVALID": "Your Google account could not be verified",
+  "PHONE_AUTH_DISABLED": "Phone sign-in is disabled",
+  "PHONE_NOT_VERIFIED": "Verify your phone number to continue",
+  "OTP_INVALID": "That code is incorrect",
+  "OTP_EXPIRED": "That code has expired, request a new one",
+  "OTP_TOO_MANY_ATTEMPTS": "Too many incorrect attempts, request a new code",
+
+  "CART_EMPTY": "Your basket is empty",
+  "PRODUCT_UNAVAILABLE": "One of the selected products is no longer available",
+  "CATEGORY_NOT_EMPTY": "This category still has products or subcategories, move them first",
+  "UPLOAD_REJECTED": "The file was rejected"
+}

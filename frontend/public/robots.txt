@@ -1,0 +1,6 @@
+# The shop is a public catalogue; the panel and the account pages are not.
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /profile
+Disallow: /cart

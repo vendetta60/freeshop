@@ -1,0 +1,232 @@
+/* ==========================================================================
+   Quiet Glass - design tokens (plan.md 3.2)
+
+   Three rules produce the whole look:
+     1. ONE accent hue live at a time. Azure (250) or bronze (65). Never both.
+     2. Chroma ceiling C <= 0.15 on all chrome. Semantics are desaturated.
+     3. Depth comes from light - translucency, a specular edge, a neutral
+        shadow - never from a different hue.
+
+   The product photography is the colour. Everything else is near-monochrome.
+
+   Dark mode has THREE selectors on purpose:
+     :root[data-theme='dark']                       -> explicit toggle
+     @media (prefers-color-scheme: dark) :root:not([data-theme='light'])
+                                                    -> system default
+   A colour must never be defined only inside a media query.
+   ========================================================================== */
+
+:root {
+  /* ---- Neutral canvas (hue 265, chroma <= 0.012) ---- */
+  --bg: oklch(0.985 0.002 265);
+  --bg-elevated: oklch(1 0 265);
+  --surface: oklch(1 0 265);
+  --surface-2: oklch(0.968 0.003 265);
+  --surface-3: oklch(0.94 0.004 265);
+  --border: oklch(0.905 0.004 265);
+  --border-strong: oklch(0.84 0.006 265);
+
+  --text: oklch(0.22 0.012 265);
+  --text-muted: oklch(0.52 0.01 265);
+  --text-subtle: oklch(0.64 0.008 265);
+  --text-inverse: oklch(0.985 0.002 265);
+
+  /* ---- The single accent: azure (default) ---- */
+  --accent: oklch(0.55 0.115 250);
+  --accent-hover: oklch(0.495 0.12 250);
+  --accent-active: oklch(0.445 0.118 250);
+  --accent-subtle: oklch(0.955 0.02 250);
+  --accent-border: oklch(0.87 0.045 250);
+  --on-accent: oklch(0.995 0 250);
+
+  /* ---- Semantics (deliberately desaturated) ---- */
+  --success: oklch(0.56 0.095 155);
+  --warning: oklch(0.7 0.105 78);
+  --danger: oklch(0.545 0.145 25);
+  --success-subtle: oklch(0.96 0.022 155);
+  --warning-subtle: oklch(0.965 0.03 78);
+  --danger-subtle: oklch(0.96 0.025 25);
+
+  /* ---- Glass ---- */
+  --glass-tint: color-mix(in oklab, var(--surface) 64%, transparent);
+  /* Two depths, because legibility need scales with text density.
+     deep  (92%) - drawers and sheets: large type, generous spacing.
+     solid (97%) - menus and the palette: dense lists where an 8% bleed of a
+                   large dark heading is still legible through the surface.
+     Contrast holds against the worst backdrop, not a flat mock (plan.md 15). */
+  --glass-tint-deep: color-mix(in oklab, var(--surface) 92%, transparent);
+  --glass-tint-solid: color-mix(in oklab, var(--surface) 97%, transparent);
+  --glass-blur: 20px;
+  --glass-saturate: 180%;
+  --glass-edge: color-mix(in oklab, white 55%, transparent);
+  --glass-hairline: color-mix(in oklab, var(--border) 70%, transparent);
+  --glass-shadow:
+    0 1px 2px oklch(0.22 0.012 265 / 0.05), 0 8px 24px -6px oklch(0.22 0.012 265 / 0.1),
+    0 24px 48px -16px oklch(0.22 0.012 265 / 0.08);
+
+  /* ---- Radii (iOS continuous-corner feel) ---- */
+  --r-xs: 8px;
+  --r-sm: 12px;
+  --r-md: 16px;
+  --r-lg: 22px;
+  --r-xl: 28px;
+  --r-full: 999px;
+
+  /* ---- Motion ---- */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --d-fast: 140ms;
+  --d-base: 220ms;
+  --d-slow: 380ms;
+
+  /* ---- Layout ---- */
+  --nav-h: 56px;
+  --tabbar-h: 60px;
+  --content-max: 1440px;
+}
+
+/* ==========================================================================
+   Dark palette.
+
+   NOT wrapped in @layer: unlayered styles beat layered ones no matter their
+   specificity, and the base :root block above is unlayered. Putting these in
+   a layer would make dark mode a silent no-op. Plain specificity handles it:
+   :root[data-theme='dark'] (0,2,0) outranks :root (0,1,0).
+
+   Two selectors, because a colour must never be defined only inside a media
+   query: one for the explicit toggle, one for the system preference.
+   ========================================================================== */
+:root[data-theme='dark'] {
+  --bg: oklch(0.165 0.008 265);
+  --bg-elevated: oklch(0.205 0.009 265);
+  --surface: oklch(0.212 0.009 265);
+  --surface-2: oklch(0.248 0.01 265);
+  --surface-3: oklch(0.285 0.01 265);
+  --border: oklch(0.32 0.01 265);
+  --border-strong: oklch(0.41 0.012 265);
+
+  --text: oklch(0.96 0.003 265);
+  --text-muted: oklch(0.72 0.008 265);
+  --text-subtle: oklch(0.6 0.008 265);
+  --text-inverse: oklch(0.18 0.01 265);
+
+  --accent: oklch(0.715 0.115 250);
+  --accent-hover: oklch(0.77 0.11 250);
+  --accent-active: oklch(0.66 0.118 250);
+  --accent-subtle: oklch(0.29 0.045 250);
+  --accent-border: oklch(0.4 0.07 250);
+  --on-accent: oklch(0.155 0.02 250);
+
+  --success: oklch(0.75 0.1 155);
+  --warning: oklch(0.805 0.105 78);
+  --danger: oklch(0.69 0.145 25);
+  --success-subtle: oklch(0.275 0.038 155);
+  --warning-subtle: oklch(0.29 0.045 78);
+  --danger-subtle: oklch(0.28 0.048 25);
+
+  --glass-tint: color-mix(in oklab, var(--surface) 58%, transparent);
+  --glass-tint-deep: color-mix(in oklab, var(--surface) 91%, transparent);
+  --glass-tint-solid: color-mix(in oklab, var(--surface) 97%, transparent);
+  --glass-edge: color-mix(in oklab, white 14%, transparent);
+  --glass-hairline: color-mix(in oklab, white 10%, transparent);
+  --glass-shadow:
+    0 1px 2px oklch(0 0 0 / 0.3), 0 8px 24px -6px oklch(0 0 0 / 0.4),
+    0 24px 48px -16px oklch(0 0 0 / 0.34);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: oklch(0.165 0.008 265);
+    --bg-elevated: oklch(0.205 0.009 265);
+    --surface: oklch(0.212 0.009 265);
+    --surface-2: oklch(0.248 0.01 265);
+    --surface-3: oklch(0.285 0.01 265);
+    --border: oklch(0.32 0.01 265);
+    --border-strong: oklch(0.41 0.012 265);
+
+    --text: oklch(0.96 0.003 265);
+    --text-muted: oklch(0.72 0.008 265);
+    --text-subtle: oklch(0.6 0.008 265);
+    --text-inverse: oklch(0.18 0.01 265);
+
+    --accent: oklch(0.715 0.115 250);
+    --accent-hover: oklch(0.77 0.11 250);
+    --accent-active: oklch(0.66 0.118 250);
+    --accent-subtle: oklch(0.29 0.045 250);
+    --accent-border: oklch(0.4 0.07 250);
+    --on-accent: oklch(0.155 0.02 250);
+
+    --success: oklch(0.75 0.1 155);
+    --warning: oklch(0.805 0.105 78);
+    --danger: oklch(0.69 0.145 25);
+    --success-subtle: oklch(0.275 0.038 155);
+    --warning-subtle: oklch(0.29 0.045 78);
+    --danger-subtle: oklch(0.28 0.048 25);
+
+    --glass-tint: color-mix(in oklab, var(--surface) 58%, transparent);
+    --glass-tint-deep: color-mix(in oklab, var(--surface) 91%, transparent);
+    --glass-tint-solid: color-mix(in oklab, var(--surface) 97%, transparent);
+    --glass-edge: color-mix(in oklab, white 14%, transparent);
+    --glass-hairline: color-mix(in oklab, white 10%, transparent);
+    --glass-shadow:
+      0 1px 2px oklch(0 0 0 / 0.3), 0 8px 24px -6px oklch(0 0 0 / 0.4),
+      0 24px 48px -16px oklch(0 0 0 / 0.34);
+  }
+}
+
+/* ==========================================================================
+   Alternate accent: warm bronze. Set data-accent="bronze" on <html>.
+   EXACTLY six tokens change. If a third accent ever needs a seventh token,
+   the component using it is wrong - fix the component (plan.md 3.2).
+
+   Source order matters: these follow the dark block, so for dark + bronze the
+   (0,3,0) combined selector supplies the accent while the dark block still
+   supplies the surfaces.
+   ========================================================================== */
+:root[data-accent='bronze'] {
+  --accent: oklch(0.58 0.1 65);
+  --accent-hover: oklch(0.525 0.105 65);
+  --accent-active: oklch(0.475 0.1 65);
+  --accent-subtle: oklch(0.96 0.022 65);
+  --accent-border: oklch(0.875 0.045 65);
+  --on-accent: oklch(0.995 0 65);
+}
+
+:root[data-accent='bronze'][data-theme='dark'] {
+  --accent: oklch(0.74 0.095 65);
+  --accent-hover: oklch(0.795 0.09 65);
+  --accent-active: oklch(0.685 0.1 65);
+  --accent-subtle: oklch(0.295 0.04 65);
+  --accent-border: oklch(0.405 0.06 65);
+  --on-accent: oklch(0.165 0.02 65);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-accent='bronze']:not([data-theme='light']) {
+    --accent: oklch(0.74 0.095 65);
+    --accent-hover: oklch(0.795 0.09 65);
+    --accent-active: oklch(0.685 0.1 65);
+    --accent-subtle: oklch(0.295 0.04 65);
+    --accent-border: oklch(0.405 0.06 65);
+    --on-accent: oklch(0.165 0.02 65);
+  }
+}
+
+/* ==========================================================================
+   Reduced motion - collapse every transition to a short fade (plan.md 3.5).
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --d-fast: 1ms;
+    --d-base: 100ms;
+    --d-slow: 100ms;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 100ms !important;
+    scroll-behavior: auto !important;
+  }
+}
