@@ -2,18 +2,32 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import CheckConstraint, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base, TimestampMixin
+from app.db.base import Base, TimestampMixin, UtcDateTime
 
 if TYPE_CHECKING:
     from app.db.models.product import Product
     from app.db.models.user import User
 
 ORDER_STATUSES = ("new", "viewed", "completed", "cancelled")
+
+# Per-LINE outcome (FreeShop_Prompt 5, Rule C).
+#
+# Ten people ask for one ladder; one gets it. The other nine are not a
+# failure to be swept up - they are nine households within walking distance
+# who need a ladder, which is the most valuable thing this board knows. The
+# outcome is recorded per line rather than per request because one request
+# may name several items, each of which is decided separately.
+#
+#   pending      -> the giver has not chosen yet
+#   received     -> this person got it
+#   not_selected -> somebody else got it; the demand is still real
+ITEM_OUTCOMES = ("pending", "received", "not_selected")
 
 
 class OrderRequest(Base, TimestampMixin):
@@ -79,7 +93,19 @@ class OrderRequestItem(Base, TimestampMixin):
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     price_at_request_minor: Mapped[int] = mapped_column(Integer, nullable=False)
 
+    # Defaults to `pending` for every row that existed before handover was
+    # modelled, which is exactly what those rows were: undecided.
+    outcome: Mapped[str] = mapped_column(String(14), default="pending", nullable=False)
+    decided_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
+
     order_request: Mapped[OrderRequest] = relationship(back_populates="items")
     product: Mapped[Product | None] = relationship()
 
-    __table_args__ = (CheckConstraint("quantity >= 1", name="quantity_positive"),)
+    __table_args__ = (
+        CheckConstraint("quantity >= 1", name="quantity_positive"),
+        CheckConstraint(
+            "outcome IN ('pending','received','not_selected')", name="item_outcome_valid"
+        ),
+        # The handover sweep and the "keep as a need?" prompt both read this.
+        Index("ix_order_items_product_outcome", "product_id", "outcome"),
+    )

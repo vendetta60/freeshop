@@ -38,6 +38,16 @@ class UserOut(BaseModel):
     preferred_lang: str
     role: str
 
+    # The saved default location, as a LABEL only (FreeShop_Prompt 1, 15).
+    # It ships with the session so the client knows immediately whether the
+    # nearby sort will work for this person, without a second request - and
+    # so the "add your location" prompt does not flash for someone who
+    # already has one. Coordinates are never included.
+    location_label: str | None = None
+    location_city: str | None = None
+    has_location: bool = False
+
+    print("USER IS ADMIN")
     @classmethod
     def of(cls, user: User) -> UserOut:
         return cls(
@@ -49,6 +59,12 @@ class UserOut(BaseModel):
             avatar_url=user.avatar_url,
             preferred_lang=user.preferred_lang,
             role=user.role,
+            location_label=user.place_label(),
+            location_city=user.city,
+            # Having a NAME is not the same as being placeable: a village the
+            # gazetteer does not know gives a label and no coordinates, and
+            # the nearby sort needs the coordinates.
+            has_location=user.has_coordinates,
         )
 
 

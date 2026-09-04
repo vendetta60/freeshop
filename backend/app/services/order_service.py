@@ -13,11 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import get_settings
-from app.core.errors import AppError, ErrorCode
+from app.core.errors import AppError, ErrorCode, ForbiddenError, NotFoundError
 from app.core.logging import get_logger
-from app.db.models import OrderRequest, OrderRequestItem, Product, User
+from app.db.models import NeedRequest, OrderRequest, OrderRequestItem, Product, User
 from app.schemas.catalogue import ContactOut
-from app.services import cart_service
+from app.services import cart_service, notification_service
 
 log = get_logger(__name__)
 
@@ -206,3 +206,111 @@ async def load_for_user(
         .limit(limit)
     )
     return list(result.scalars())
+
+
+# ---------------------------------------------------------------------------
+# Choosing a recipient, and what happens to everyone else (FreeShop_Prompt 5)
+# ---------------------------------------------------------------------------
+async def requesters_for(session: AsyncSession, product_id: int) -> list[OrderRequestItem]:
+    """Every undecided ask for one listing, oldest first.
+
+    Oldest first because that is the order a giver is most likely to consider
+    fair, and because a list sorted newest-first quietly rewards whoever
+    refreshed the page most recently.
+    """
+    rows = await session.execute(
+        select(OrderRequestItem)
+        .where(OrderRequestItem.product_id == product_id, OrderRequestItem.outcome == "pending")
+        .options(selectinload(OrderRequestItem.order_request).selectinload(OrderRequest.user))
+        .order_by(OrderRequestItem.created_at.asc())
+    )
+    return list(rows.scalars())
+
+
+async def hand_over(
+    session: AsyncSession, *, product: Product, chosen_item_id: int, owner: User
+) -> tuple[OrderRequestItem, list[OrderRequestItem]]:
+    """The giver picks one person. Returns (winner, everyone_else).
+
+    THIS IS THE HEART OF Rule C. Ten people asked; one receives. The other
+    nine are NOT deleted and NOT hidden - they are marked `not_selected`,
+    which is what makes them eligible to become visible local demand if their
+    owner consents (services/need_service.from_order_item).
+
+    Consent is the reason this function does not create the needs itself. It
+    marks the outcome and notifies; turning a disappointment into a public
+    post is the requester's decision to make, not the giver's and not ours.
+    """
+    if product.owner_id != owner.id:
+        raise ForbiddenError()
+
+    pending = await requesters_for(session, product.id)
+    winner = next((item for item in pending if item.id == chosen_item_id), None)
+    if winner is None:
+        raise NotFoundError()
+
+    now = datetime.now(UTC)
+    winner.outcome = "received"
+    winner.decided_at = now
+    winner.order_request.status = "completed"
+
+    await notification_service.notify(
+        session,
+        user_id=winner.order_request.user_id,
+        actor_id=owner.id,
+        kind="request_accepted",
+        link=f"/profile/orders/{winner.order_request_id}",
+        product_id=product.id,
+        title=product.title_az,
+    )
+
+    others = [item for item in pending if item.id != winner.id]
+    for item in others:
+        item.outcome = "not_selected"
+        item.decided_at = now
+        await notification_service.notify(
+            session,
+            user_id=item.order_request.user_id,
+            actor_id=owner.id,
+            kind="request_not_selected",
+            link=f"/profile/orders/{item.order_request_id}",
+            product_id=product.id,
+            item_id=item.id,
+            title=product.title_az,
+        )
+
+    # The listing itself is spoken for. A give-away that has been given away
+    # must stop appearing as available, or the next nine people ask for it too.
+    if not product.is_loan:
+        product.stock_status = "out_of_stock"
+
+    await session.flush()
+    log.info(
+        "listing_handed_over",
+        product_id=product.id,
+        winner_item_id=winner.id,
+        not_selected=len(others),
+    )
+    return winner, others
+
+
+async def convertible_items(session: AsyncSession, user_id: int) -> list[OrderRequestItem]:
+    """Lines this person lost that have not yet become a need.
+
+    Drives the "Bu əşyanı ala bilmədiniz" prompt. A line whose need already
+    exists is excluded, so the prompt does not keep reappearing after it has
+    been answered.
+    """
+    rows = await session.execute(
+        select(OrderRequestItem)
+        .join(OrderRequest, OrderRequest.id == OrderRequestItem.order_request_id)
+        .outerjoin(NeedRequest, NeedRequest.source_order_item_id == OrderRequestItem.id)
+        .where(
+            OrderRequest.user_id == user_id,
+            OrderRequestItem.outcome == "not_selected",
+            NeedRequest.id.is_(None),
+        )
+        .options(selectinload(OrderRequestItem.product))
+        .order_by(OrderRequestItem.decided_at.desc())
+    )
+    return list(rows.scalars())

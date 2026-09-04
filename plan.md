@@ -1488,3 +1488,106 @@ Then execute §13 phase by phase. Phase 0 must end with `brand.config.ts` in pla
 | Prod host port | **`HTTP_PORT`, default 8090**; Caddy binds `:80` not a hostname (§13.2/C5). | Verified in Docker |
 | OTP delivery | **`OTP_CHANNEL=console`**, demoed through the §9.11 dev OTP inbox. Provider adapters remain swappable with no code change. | Owner |
 | Seed data | **Committed, deterministic, 3 tiers** (§8.1). 45 curated demo products carrying 15 named edge cases; `stress` tier backs the §11 perf claims. | Owner |
+
+---
+
+## 21. The community layer — location, needs, messaging, lending, aid
+
+> Added after the give-away board was working. This section is authoritative
+> for everything below; where it and an earlier section disagree about a
+> table or an endpoint, this one is newer.
+
+The board could say *what* was being given away but not *where*, and it had
+no way to record what people were **looking for**. Five features close that
+gap, and they share one spine: a location abstraction, a conversation, and a
+moderation queue that already existed.
+
+### 21.1 The decisions that shaped it
+
+| # | Decision | Why |
+|---|---|---|
+| **C1** | **Location is a mixin, not a `locations` table.** Seven columns (`country`, `region`, `city`, `district`, `latitude`, `longitude`, `location_precision`) declared once in `app/db/models/location.py` and mixed into `users`, `products`, `need_requests`, `emergency_aid_cases`. | Every located row has exactly one location, never shared. A separate table would add a join to the hottest query in the application to buy a foreign key. Declared once means the four tables cannot drift. |
+| **C2** | **Coordinates are city/district CENTROIDS from a static gazetteer** (`app/services/geo_data.py`, 71 towns + 12 Bakı districts), never the user's own position. The API accepts a place NAME and resolves it server-side; `LocationIn` has no latitude field. | The alternatives are all worse: a geocoder is a paid dependency in the critical path (§1), and `navigator.geolocation` hands the server somebody's doorstep. Everyone in Lənkəran shares one coordinate pair — that is not an approximation we tolerate, it is the privacy property. No row can locate a person more precisely than "somewhere in their town", because nothing more precise was ever collected. |
+| **C3** | **Proximity = bounding box in SQL, Haversine in Python.** `app/services/geo.py`. | SQLite only has `acos`/`cos`/`radians` when compiled with `SQLITE_ENABLE_MATH_FUNCTIONS`, which is true on some builds and false on others. A nearby sort that raises `no such function: acos` on a colleague's machine is worse than one that is approximate in its first pass. The box is *exact as a filter* — it can only over-include — so correctness lives in the Python step, which is portable. **Ceiling:** ranking is over at most `CANDIDATE_CAP` (2000) boxed rows. **Upgrade path:** PostGIS `ST_DWithin` + `ORDER BY distance` replaces `within_bbox` and `rank_by_distance`, and nothing else. |
+| **C4** | **No coordinates ever leave the API.** `LocationOut` carries a place label and a rounded distance; there is no lat/lng field on any public DTO. Distances are rounded to 0.1 km below 10 km and to whole kilometres above. | A distance quoted to the metre, from enough origins, triangulates the thing it measured. Enforced by a test that greps whole response bodies, so a coordinate added to any nested DTO later fails the build. |
+| **C5** | **`nearby` degrades, never fails.** With no origin the server sorts by newest and says so in `Page.applied_sort`. | FreeShop_Prompt §2: "do not break the page". The client renders "add your location for better results" from the server's answer, so the note can never contradict the list beneath it. |
+| **C6** | **Needs are a separate table, not a direction flag on `products`.** | A need has no price, no photographs, no stock status and no transfer type. Folding it in would mean four more nullable columns and a filter on every existing query — including the ones that already work. |
+| **C7** | **Needs reuse the product moderation vocabulary exactly** (`pending`/`approved`/`rejected`, `moderation_note`, `reviewed_at`) and default to `pending`. | The admin panel reuses its table, filters and status pills, and a moderator moving between the two queues does not learn a second interface. Fail-closed: a code path that forgets to set the status publishes nothing. |
+| **C8** | **Posting a need needs no verified phone; offering an item still does.** | Publishing a listing is a promise to meet a stranger and hand something over. Admitting you need a pushchair is not, and requiring a verified number to say so would exclude exactly the people this board exists for. Borrowing *does* need one — it is a promise to give property back. |
+| **C9** | **Handover is recorded per LINE, not per request.** `order_request_items.outcome` ∈ `pending`/`received`/`not_selected`. | One request may name several items, each decided separately. This column is what makes Rule C possible: the nine people who did not get the ladder are *marked*, not deleted. |
+| **C10** | **Converting a lost request into a need is the requester's decision and is deduplicated.** `POST /needs/from-request-item/{id}`, matched on the folded title + category, returns 200 (not 201) when a matching open need already exists. | Aggregate demand is the product of this endpoint, so it has to be trustworthy: somebody who misses out on four ladders in a month is one household, not four. |
+| **C11** | **Public demand is a COUNT.** `GET /needs/demand` groups by folded title and returns `{label, count, nearest_km}` with no identities. | Rule F. Who needs a pushchair is not public information; a helper opens a conversation from an individual need, which is an authorised one-to-one act. |
+| **C12** | **A conversation's participant row IS the authorisation.** There is no endpoint that adds a participant; `open_thread` resolves the other party from the context object. A thread you are not in is **404**, not 403. | An API where a client names its own recipient is an open channel to every account on the platform. 403 would confirm that two named people are talking. |
+| **C13** | **Polling, not WebSockets.** 60 s for the badge, 30 s for the inbox, 15 s for an open thread. | One uvicorn process behind Caddy (§12.3); messages on a give-away board arrive minutes apart. A socket layer adds a connection lifecycle, a reconnect story and a second auth path for something nobody would notice. FreeShop_Prompt §3 permits polling for v1. |
+| **C14** | **Message pagination is keyset (`before_id`), not offset. Only the FIRST page marks a thread read.** | A thread is read while it is being written to; an offset shifts under the reader every time the other person types. Paging backwards through history is not "I have seen the newest message". |
+| **C15** | **A listing's loan state is DERIVED, never stored.** `Product.transfer_type` says whether it is a loan at all; `available`/`reserved`/`borrowed` is computed from the live `loan_requests` row. | Two copies of the truth means two rows that can disagree, and the stale one is always the one the UI reads. `loan_service.listing_states()` answers for a whole page in one query. |
+| **C16** | **Every loan transition goes through one table.** `LOAN_TRANSITIONS` (which moves exist) × `ACTORS` (who may make them). The single-live-loan check is re-run inside the approving transaction. | "Returned" for an item that was never collected is exactly the nonsense an explicit table refuses. Between loading the page and clicking, an owner may already have approved somebody else. |
+| **C17** | **Only `api/v1/admin_community.py` can create an emergency aid case, and it is the only module that serves `verification_note_internal`.** The public DTO does not *have* the field. | Rule E. A badge reading "Təcili yardım" is a claim about somebody's life. A missing field is a stronger guarantee than a serializer remembering to exclude one. |
+| **C18** | **Aid item counters are derived and recomputed, never incremented.** `emergency_service.recount()` re-aggregates from the commitments after every change. | An increment that runs twice leaves "3 of 2 blankets received" on a public page, which is the kind of wrong that makes people stop trusting the whole thing. |
+| **C19** | **An offer is not a delivery.** `offered → accepted → received`, and only an administrator may set the last two. | Marking an item received on a click tells the next visitor the family already has blankets that are still in a stranger's hallway. A donor confirming their own delivery turns the page into a wish list. |
+| **C20** | **Notifications store a stable `type` + a JSON payload, never a sentence.** The client owns one translated string per type (`notification.*`). | A row storing "Sizə mesaj var" is frozen into Azerbaijani for a reader who later switches to English. It is also what makes a second transport (a digest email, a Telegram bot) a new consumer of these rows rather than a rewrite. |
+| **C21** | **`User.display_name` never falls back to a phone number or an email.** Somebody with no name set is `#41`. Admin views keep their own fallback to the phone. | Two people arranging a handover exchange what they choose to type; the platform does not hand over a number because somebody opened a conversation (§15). Found by a test, not by review. |
+| **C22** | **The command palette is now lazy.** `cmdk` moved out of the entry chunk into `PaletteBody`. | Adding this feature set pushed initial JS to 123 kB against the §11 ceiling of 120. Rather than raise the budget, the palette — a modal most visits never open — stopped being in the first paint. Initial JS is now **107.3 kB**, *below* where it started. |
+
+### 21.2 Data model additions
+
+**New tables (9)**
+
+| Table | Purpose | Key columns |
+|---|---|---|
+| `need_requests` | Things people are looking for | `+ LocationMixin`, `title`, `search_text` (folded), `status` (`open`/`partially_fulfilled`/`fulfilled`/`closed`/`expired`), `moderation_status`, `expires_at`, `source_order_item_id` |
+| `conversations` | One thread per subject per pair | `type` (`listing`/`need`/`loan`/`emergency`), four nullable context FKs, `last_message_at` (denormalised for ordering) |
+| `conversation_participants` | Membership = authorisation | `uq_participant_once`, `last_read_at` |
+| `messages` | Thread contents | `body`, `edited_at`, `deleted_at` (soft) |
+| `loan_requests` | The lending lifecycle | `status`, `requested_days`, `approved_at`, `borrowed_at`, `expected_return_at`, `returned_at` |
+| `emergency_aid_cases` | Admin-verified aid | `+ LocationMixin`, `slug`, `status`, **`verification_note_internal` (admin-only)**, `created_by_admin_id` |
+| `emergency_aid_items` | The shopping list | `quantity_needed`, `quantity_committed`, `quantity_received` (both derived), `priority` |
+| `aid_commitments` | "I can bring two blankets" | `quantity`, `status`, `accepted_at`, `received_at` |
+| `notifications` | In-app events | `type`, `payload_json`, `link`, `read_at` |
+
+**Changed tables (3)** — all additive, all defaulted:
+
+- `users` — LocationMixin (the saved default location)
+- `products` — LocationMixin, `transfer_type` (back-filled `giveaway`), `available_from`, `available_until`, `max_borrow_days`
+- `order_request_items` — `outcome` (back-filled `pending`), `decided_at`
+
+**Migration `b7c1d2e3f4a5`.** Nothing dropped, nothing renamed. Server defaults exist only to satisfy NOT NULL for existing rows and are dropped in the same migration, so `alembic revision --autogenerate` reports **zero drift** against the models. Verified: upgrade → downgrade → upgrade on a clean database, with the downgrade removing every added column.
+
+**Indexes added:** `ix_products_geo`, `ix_products_transfer`, `ix_need_requests_public`, `ix_need_requests_geo`, `ix_need_requests_category`, `ix_loan_requests_product_status`, `ix_loan_requests_due`, `ix_messages_thread`, `ix_participants_user`, `ix_commitments_item_status`, `ix_notifications_unread`, `ix_order_items_product_outcome`.
+
+### 21.3 API surface
+
+Existing endpoints changed only additively — new optional query parameters and new response fields; every previous request shape still works.
+
+- `GET /products` — new `sort=nearby|most_requested`, `radius_km`, `transfer_type`, `city`, `lat`, `lng`; responses gain `location`, `transfer_type`, `loan_state`; `Page` gains `applied_sort`
+- `GET /products/{slug}` — adds loan terms and `open_request_count`
+- `GET|POST /products/{id}/requesters` · `/handover` · `/matching-needs` — the Rule C flow, owner-only
+- `GET|PUT /users/me/location` · `GET /meta/places` · `GET /meta/radius-options`
+- `/needs` — list, demand, mine, convertible, create, `from-request-item/{id}`, detail, matching-listings, patch, status
+- `/conversations` — list, unread, open, thread, send, read
+- `/loans` — mine, lent, request, detail, status
+- `/aid` — cases, case detail, my commitments, offer, withdraw
+- `/notifications` — list, read one, read all
+- `/admin/needs`, `/admin/needs/{id}/moderate`, `/admin/aid/**` — moderation and case management
+
+### 21.4 Frontend
+
+Routes: `/needs`, `/needs/new`, `/needs/:id`, `/profile/needs`, `/messages`, `/messages/:id`, `/profile/loans`, `/aid`, `/aid/:slug`, `/profile/aid`, `/admin/needs`, `/admin/aid`, `/admin/aid/:id`. All lazy.
+
+Components: `PlaceLine`/`DistanceBadge`, `LocationPicker` (two selects — there is no control capable of expressing a house), `RadiusSelector`, `NearbyUnavailableNote`, `NeedCard`/`DemandRow`, `HandoverPanel`, `KeepAsNeedPrompt`, `LoanRequestPanel`, `LoanBadge`, `AidCaseCard`. One new stylesheet, `community.css`, consuming the existing tokens — no second design language.
+
+i18n: **256 new keys × 2 languages** (672 total), `npm run i18n:check` green.
+
+### 21.5 Verified green
+
+`ruff` · `ruff format` · `mypy --strict` (78 files) · **206 backend tests** (118 pre-existing, all still passing + 88 new) · `eslint` · `tsc --noEmit` · `prettier` · 34 frontend tests · `i18n:check` (672 × 2) · production build · **initial JS 107.3 kB / 120 kB**, CSS 12.0 kB / 20 kB · Alembic upgrade → downgrade → upgrade with zero autogenerate drift.
+
+### 21.6 Limitations, honestly
+
+1. **The gazetteer is a fixed list.** A village that is not in `geo_data.py` keeps its typed name and gets no coordinates, so it cannot take part in the nearby sort. That is a deliberate trade against a paid geocoder, and adding a place is a one-line edit.
+2. **Nearby ranking is capped at 2000 boxed candidates** (C3). Fine for a town; the PostGIS upgrade path is one function.
+3. **Needs expire on read, not on a schedule.** There is no job runner in this deployment (§12.3), so `expire_stale()` runs from the needs list endpoint.
+4. **Notifications are in-app only.** No push, no SMS, no email digest — the abstraction is there for one.
+5. **`loan_due_soon` is queryable but not yet produced**; nothing wakes up to send it. Same reason as (3).
+6. **Messages have no edit or delete endpoint** yet, although the columns (`edited_at`, `deleted_at`) and the serializer support both.
+7. **No reporting/abuse flow** for conversations. FreeShop_Prompt §11 listed it as conditional ("if reporting is implemented"); it is not.

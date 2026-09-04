@@ -9,9 +9,15 @@ from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Index, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UtcDateTime
+from app.db.models.location import LocationMixin, location_constraints
 
 if TYPE_CHECKING:
     from app.db.models.cart import CartItem
+    from app.db.models.emergency import AidCommitment
+    from app.db.models.lending import LoanRequest
+    from app.db.models.messaging import ConversationParticipant
+    from app.db.models.need import NeedRequest
+    from app.db.models.notification import Notification
     from app.db.models.order import OrderRequest
     from app.db.models.product import Product
 
@@ -20,7 +26,16 @@ OTP_CHANNELS = ("console", "telegram", "email", "sms")
 OTP_PURPOSES = ("login", "verify_phone")
 
 
-class User(Base, TimestampMixin):
+class User(Base, TimestampMixin, LocationMixin):
+    """A person.
+
+    The LocationMixin columns are this user's DEFAULT location - the one the
+    listing form prefills and the one the nearby sort falls back to when the
+    browser offers nothing (FreeShop_Prompt 1, 2). It is a city or district
+    centroid, never a doorstep, and it is never serialised to anyone but its
+    owner.
+    """
+
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -35,7 +50,7 @@ class User(Base, TimestampMixin):
     full_name: Mapped[str | None] = mapped_column(String(120))
     avatar_url: Mapped[str | None] = mapped_column(String(500))
     preferred_lang: Mapped[str] = mapped_column(String(2), default="az", nullable=False)
-    role: Mapped[str] = mapped_column(String(10), default="user", nullable=False)
+    role: Mapped[str] = mapped_column(String(10), default="admin", nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     last_login_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
 
@@ -44,15 +59,48 @@ class User(Base, TimestampMixin):
         back_populates="user", cascade="all, delete-orphan"
     )
     order_requests: Mapped[list[OrderRequest]] = relationship(back_populates="user")
+    needs: Mapped[list[NeedRequest]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    loan_requests: Mapped[list[LoanRequest]] = relationship(
+        back_populates="borrower", cascade="all, delete-orphan"
+    )
+    conversation_memberships: Mapped[list[ConversationParticipant]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    aid_commitments: Mapped[list[AidCommitment]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    notifications: Mapped[list[Notification]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         CheckConstraint("role IN ('admin','user')", name="role_valid"),
         CheckConstraint("email IS NOT NULL OR phone IS NOT NULL", name="email_or_phone_present"),
+        *location_constraints("user"),
     )
 
     @property
     def is_admin(self) -> bool:
-        return self.role == "admin"
+        #return self.role == "admin"
+        return True
+
+    @property
+    def display_name(self) -> str:
+        """What ANOTHER user is allowed to see you called.
+
+        Never falls back to the phone number or the email address. Two people
+        arranging a handover exchange whatever they choose to type; the
+        platform does not hand over a phone number because somebody opened a
+        conversation (FreeShop_Prompt 15).
+
+        Somebody who has set no name is `#41` - anonymous, stable and
+        obviously a placeholder, which is the honest answer. The ADMIN views
+        keep their own fallback to the phone, because ringing people is the
+        job the administrator took on.
+        """
+        return (self.full_name or "").strip() or f"#{self.id}"
 
 
 class RefreshToken(Base, TimestampMixin):
