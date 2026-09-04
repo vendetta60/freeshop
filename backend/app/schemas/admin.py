@@ -49,6 +49,13 @@ class ProductIn(BaseModel):
     is_featured: bool = False
     slug: Slug | None = None
 
+    city: str | None = Field(default=None, max_length=80)
+    district: str | None = Field(default=None, max_length=80)
+    transfer_type: Literal["giveaway", "loan"] = "giveaway"
+    available_from: datetime | None = None
+    available_until: datetime | None = None
+    max_borrow_days: int | None = Field(default=None, ge=1, le=365)
+
 
 class ProductUpdateIn(BaseModel):
     """Patch payload: every field optional, absent means unchanged.
@@ -71,6 +78,13 @@ class ProductUpdateIn(BaseModel):
     is_featured: bool | None = None
     slug: Slug | None = None
 
+    city: str | None = Field(default=None, max_length=80)
+    district: str | None = Field(default=None, max_length=80)
+    transfer_type: Literal["giveaway", "loan"] | None = None
+    available_from: datetime | None = None
+    available_until: datetime | None = None
+    max_borrow_days: int | None = Field(default=None, ge=1, le=365)
+
 
 class SubmissionIn(BaseModel):
     """What a visitor fills in to offer something.
@@ -92,6 +106,45 @@ class SubmissionIn(BaseModel):
     price_minor: int = Field(default=0, ge=0, le=1_000_000_000)
     category_id: int
     stock_status: StockStatus = "available"
+
+    # Where the thing is (FreeShop_Prompt 1). Optional: when it is omitted the
+    # service copies the poster's saved default, which is the case that needs
+    # to be one click rather than a form.
+    city: str | None = Field(default=None, max_length=80)
+    district: str | None = Field(default=None, max_length=80)
+
+    # Give away, or lend (FreeShop_Prompt 7). Defaults to the thing this site
+    # has always been for.
+    transfer_type: Literal["giveaway", "loan"] = "giveaway"
+    available_from: datetime | None = None
+    available_until: datetime | None = None
+    max_borrow_days: int | None = Field(default=None, ge=1, le=365)
+
+
+class HandoverIn(BaseModel):
+    """Which of the people who asked is receiving it (FreeShop_Prompt 5)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    request_item_id: int
+
+
+class RequesterOut(BaseModel):
+    """One person who asked for a listing, shown ONLY to its owner.
+
+    This is the authorised view Rule F carves out: the public sees a count,
+    the giver sees who they are choosing between. Contact details are still
+    not here - the giver reaches the person through a conversation, which
+    leaves a record and can be reported.
+    """
+
+    request_item_id: int
+    request_no: str
+    user_id: int
+    display_name: str
+    note: str | None
+    quantity: int
+    requested_at: datetime
 
 
 class ModerationIn(BaseModel):
@@ -118,10 +171,19 @@ class MyListingOut(BaseModel):
     created_at: datetime
     reviewed_at: datetime | None
 
+    transfer_type: str = "giveaway"
+    location_label: str | None = None
+    # How many people are still waiting on a decision from this owner. It is
+    # the badge that makes the handover panel discoverable.
+    open_request_count: int = 0
+
     @classmethod
-    def of(cls, product: Product, lang: str = "az") -> MyListingOut:
+    def of(cls, product: Product, lang: str = "az", *, open_request_count: int = 0) -> MyListingOut:
         main = product.main_image
         return cls(
+            transfer_type=product.transfer_type,
+            location_label=product.place_label(),
+            open_request_count=open_request_count,
             id=product.id,
             slug=product.slug,
             title=product.title(lang),

@@ -19,11 +19,24 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.db.base import Base, TimestampMixin, UtcDateTime
+from app.db.models.lending import TRANSFER_TYPES
+from app.db.models.location import LocationMixin, location_constraints
 
 if TYPE_CHECKING:
+    from app.db.models.lending import LoanRequest
     from app.db.models.user import User
 
 STOCK_STATUSES = ("available", "out_of_stock", "on_order")
+
+# Re-exported so callers that already import from this module keep working.
+__all__ = [
+    "MODERATION_STATUSES",
+    "STOCK_STATUSES",
+    "TRANSFER_TYPES",
+    "Category",
+    "Product",
+    "ProductImage",
+]
 
 # Moderation states. Anyone signed in may offer an item; an administrator
 # decides whether it appears on the site.
@@ -67,7 +80,7 @@ class Category(Base, TimestampMixin):
         return (self.name_en or self.name_az) if lang == "en" else self.name_az
 
 
-class Product(Base, TimestampMixin):
+class Product(Base, TimestampMixin, LocationMixin):
     __tablename__ = "products"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -106,12 +119,27 @@ class Product(Base, TimestampMixin):
     # Soft delete: hard-deleting orphans historical order requests (plan.md D7).
     deleted_at: Mapped[datetime | None] = mapped_column(UtcDateTime, index=True)
 
+    # --- lending (FreeShop_Prompt 7) ---------------------------------------
+    # Every listing that existed before this column was added is a give-away,
+    # which is why the migration back-fills that value and why it is the
+    # application default too: forgetting to pass it cannot turn a gift into
+    # a loan.
+    transfer_type: Mapped[str] = mapped_column(
+        String(10), default="giveaway", nullable=False, index=True
+    )
+    available_from: Mapped[datetime | None] = mapped_column(UtcDateTime)
+    available_until: Mapped[datetime | None] = mapped_column(UtcDateTime)
+    max_borrow_days: Mapped[int | None] = mapped_column(Integer)
+
     category: Mapped[Category] = relationship(back_populates="products")
     owner: Mapped[User] = relationship(back_populates="products")
     images: Mapped[list[ProductImage]] = relationship(
         back_populates="product",
         cascade="all, delete-orphan",
         order_by="ProductImage.sort_order",
+    )
+    loan_requests: Mapped[list[LoanRequest]] = relationship(
+        back_populates="product", cascade="all, delete-orphan"
     )
 
     __table_args__ = (
@@ -120,12 +148,27 @@ class Product(Base, TimestampMixin):
         ),
         CheckConstraint("price_minor >= 0", name="price_non_negative"),
         CheckConstraint("status IN ('pending','approved','rejected')", name="moderation_valid"),
+        CheckConstraint("transfer_type IN ('giveaway','loan')", name="transfer_type_valid"),
+        CheckConstraint(
+            "max_borrow_days IS NULL OR max_borrow_days BETWEEN 1 AND 365",
+            name="max_borrow_days_range",
+        ),
+        *location_constraints("product"),
         Index("ix_products_listing", "category_id", "deleted_at", "created_at"),
         Index("ix_products_price", "deleted_at", "price_minor"),
         Index("ix_products_featured", "is_featured", "deleted_at"),
         Index("ix_products_moderation", "status", "created_at"),
         Index("ix_products_search", "search_text"),
+        # The nearby sort reads this: a bounding box on approved, live rows
+        # (services/geo.py). Coordinates lead, because the box is the
+        # selective part of the predicate.
+        Index("ix_products_geo", "latitude", "longitude"),
+        Index("ix_products_transfer", "transfer_type", "status", "deleted_at"),
     )
+
+    @property
+    def is_loan(self) -> bool:
+        return self.transfer_type == "loan"
 
     def refresh_search_text(self) -> None:
         """Recompute the folded search copy. Call after any title/description

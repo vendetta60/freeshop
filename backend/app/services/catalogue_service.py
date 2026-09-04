@@ -9,7 +9,7 @@ catalogue rather than of any one endpoint.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Protocol
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +17,8 @@ from sqlalchemy.orm import selectinload
 
 from app.core.errors import AppError, ErrorCode, NotFoundError
 from app.core.text import slugify
-from app.db.models import Category, Product, ProductImage
+from app.db.models import Category, OrderRequestItem, Product, ProductImage, User
+from app.services import geo
 
 PRODUCT_RELATIONS = (
     selectinload(Product.images),
@@ -28,9 +29,22 @@ PRODUCT_RELATIONS = (
 # ---------------------------------------------------------------------------
 # Slugs
 # ---------------------------------------------------------------------------
+class Sluggable(Protocol):
+    """Any model with an `id` and a unique `slug`.
+
+    A protocol rather than a union of the three concrete classes: this
+    function grew a third caller (emergency aid cases) and would grow a
+    fourth, and widening a union at every call site is how a helper ends up
+    copied instead of reused.
+    """
+
+    id: Any
+    slug: Any
+
+
 async def unique_slug(
     session: AsyncSession,
-    model: type[Product] | type[Category],
+    model: type[Sluggable],
     source: str,
     *,
     exclude_id: int | None = None,
@@ -203,6 +217,7 @@ async def create_product(
     owner_id: int,
     *,
     status: str = "pending",
+    owner: User | None = None,
 ) -> Product:
     """Create a listing.
 
@@ -210,6 +225,11 @@ async def create_product(
     the whole point of moderation is that publishing is a decision somebody
     makes, and a default of "approved" would make forgetting to pass it
     publish the item.
+
+    `owner` is optional and is used only to inherit a default location
+    (FreeShop_Prompt 1). It is a separate argument from `owner_id` because
+    the admin create route sets an owner it has not loaded, and loading a row
+    just to copy a city from it would be a query for nothing.
     """
     await _require_category(session, data["category_id"])
     product = Product(
@@ -227,7 +247,20 @@ async def create_product(
         owner_id=owner_id,
         status=status,
         reviewed_at=datetime.now(UTC) if status != "pending" else None,
+        transfer_type=data.get("transfer_type") or "giveaway",
+        available_from=data.get("available_from"),
+        available_until=data.get("available_until"),
+        max_borrow_days=data.get("max_borrow_days"),
     )
+
+    # An explicitly chosen place wins; otherwise the listing inherits the
+    # giver's saved default, which is right almost every time and costs them
+    # nothing (FreeShop_Prompt 1).
+    if data.get("city"):
+        geo.apply_to(product, data)
+    elif owner is not None:
+        geo.copy_from(product, owner)
+
     product.refresh_search_text()
     session.add(product)
     await session.flush()
@@ -240,9 +273,23 @@ async def update_product(session: AsyncSession, product: Product, data: dict[str
         await _require_category(session, data["category_id"])
         product.category_id = data["category_id"]
 
-    for field in ("title_az", "price_minor", "currency", "stock_status", "is_featured"):
+    for field in (
+        "title_az",
+        "price_minor",
+        "currency",
+        "stock_status",
+        "is_featured",
+        "transfer_type",
+    ):
         if data.get(field) is not None:
             setattr(product, field, data[field])
+
+    for field in ("available_from", "available_until", "max_borrow_days"):
+        if field in data:
+            setattr(product, field, data[field])
+
+    if data.get("city"):
+        geo.apply_to(product, data)
 
     # Nullable fields are cleared by sending "" or null, so an EN translation
     # or a discount ribbon can be removed as well as set (plan.md 7.3).
@@ -394,3 +441,26 @@ async def load_own_products(session: AsyncSession, owner_id: int) -> list[Produc
         .order_by(Product.created_at.desc())
     )
     return list(rows.scalars())
+
+
+# ---------------------------------------------------------------------------
+# Demand on a listing (FreeShop_Prompt 5)
+# ---------------------------------------------------------------------------
+async def open_request_counts(session: AsyncSession, product_ids: list[int]) -> dict[int, int]:
+    """How many people are still waiting on each listing, in one query.
+
+    The public API shows this number and never the names behind it (Rule F).
+    Returned as a dict so a page of cards costs one query rather than one per
+    card.
+    """
+    if not product_ids:
+        return {}
+    rows = await session.execute(
+        select(OrderRequestItem.product_id, func.count(OrderRequestItem.id))
+        .where(
+            OrderRequestItem.product_id.in_(product_ids),
+            OrderRequestItem.outcome == "pending",
+        )
+        .group_by(OrderRequestItem.product_id)
+    )
+    return {product_id: count for product_id, count in rows.all() if product_id is not None}

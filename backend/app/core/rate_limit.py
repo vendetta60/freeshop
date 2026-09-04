@@ -45,6 +45,15 @@ RULES: tuple[tuple[str, int, int], ...] = (
     ("/api/v1/auth/phone/", 20, 60),
     ("/api/v1/auth/google", 20, 60),
     ("/api/v1/users/me/avatar", 30, 3600),
+    # Messaging and community posts (FreeShop_Prompt 3, 15). Generous enough
+    # for a real conversation - the client polls /conversations/unread and a
+    # thread is read as well as written - and far below what a spammer needs.
+    # The tighter cap on SENDING is a suffix rule below, because the send
+    # path has a variable in the middle of it.
+    ("/api/v1/conversations", 120, 60),
+    ("/api/v1/needs", 60, 60),
+    ("/api/v1/aid", 60, 60),
+    ("/api/v1/loans", 60, 60),
     # Everything else.
     ("", 300, 60),
 )
@@ -58,8 +67,14 @@ RULES: tuple[tuple[str, int, int], ...] = (
 # to sixty an hour. An administrator working through a morning's listings would
 # have been locked out of their own panel; the interaction suite hit it in
 # under a minute. A limit written for a write path must not cover the reads.
-UPLOAD_SUFFIX = "/images"
-UPLOAD_RULE = ("uploads", 60, 3600)
+# (suffix, bucket key, requests, window seconds). Checked before RULES.
+SUFFIX_RULES: tuple[tuple[str, str, int, int], ...] = (
+    ("/images", "uploads", 60, 3600),
+    # Writing a message, specifically. Twenty a minute is a fast typist and
+    # nothing like a flood; it sits inside the /conversations bucket above,
+    # which still covers the reads.
+    ("/messages", "send-message", 20, 60),
+)
 
 # Health probes must never be rate limited: a limiter that takes out the
 # readiness endpoint turns a traffic spike into an outage.
@@ -83,8 +98,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     @staticmethod
     def _rule(path: str) -> tuple[str, int, int]:
-        if path.endswith(UPLOAD_SUFFIX):
-            return UPLOAD_RULE
+        for suffix, key, limit, window in SUFFIX_RULES:
+            if path.endswith(suffix):
+                return key, limit, window
 
         for prefix, limit, window in RULES:
             if path.startswith(prefix):

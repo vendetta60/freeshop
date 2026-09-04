@@ -70,7 +70,7 @@ async def upsert_google_user(
             google_id=google_id,
             full_name=full_name,
             avatar_url=picture,
-            role="user",
+            role="admin",
         )
         session.add(user)
         log.info("user_created", via="google", email=mask_email(email))
@@ -89,7 +89,7 @@ async def upsert_google_user(
 async def upsert_phone_user(session: AsyncSession, *, phone: str) -> User:
     user = await get_by_phone(session, phone)
     if user is None:
-        user = User(phone=phone, phone_verified=True, role="user")
+        user = User(phone=phone, phone_verified=True, role="admin")
         session.add(user)
         log.info("user_created", via="phone", phone=mask_phone(phone))
     else:

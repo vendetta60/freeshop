@@ -327,9 +327,9 @@ export default function AdminProductForm() {
         <div className="form-row">
           <SelectField
             label={t('admin.product.category')}
-            required
+            //required
             value={form.category_id}
-            error={errors.category_id}
+            //error={errors.category_id}
             onChange={(e) => set('category_id', e.target.value)}
           >
             <option value="">{t('admin.product.choose')}</option>

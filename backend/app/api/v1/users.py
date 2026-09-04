@@ -11,7 +11,8 @@ from app.config import get_settings
 from app.core.errors import AppError, ErrorCode, error_responses
 from app.core.security import normalise_phone
 from app.schemas.auth import OtpSentOut, PhoneIn, UpdateMeIn, UserOut, VerifyOtpIn
-from app.services import auth_service, image_service, otp_service
+from app.schemas.location import LocationIn, OwnLocationOut
+from app.services import auth_service, geo, image_service, otp_service
 
 router = APIRouter(
     prefix="/users", tags=["users"], responses=error_responses(400, 401, 404, 409, 422)
@@ -103,3 +104,36 @@ async def verify_phone(payload: VerifyOtpIn, user: CurrentUser, session: DbSessi
     user.phone_verified = True
     await session.commit()
     return UserOut.of(user)
+
+
+# ---------------------------------------------------------------------------
+# Default location (FreeShop_Prompt 1, 10)
+# ---------------------------------------------------------------------------
+@router.get("/me/location", summary="Your saved default location")
+async def read_my_location(user: CurrentUser) -> OwnLocationOut:
+    """Yours, and only yours.
+
+    Even here there are no coordinates in the response - `precision` says
+    whether the site resolved your district or only your city, which is the
+    part you might want to change. The numbers themselves are a city centroid
+    and telling you them would only invite a client to send them back.
+    """
+    return OwnLocationOut.of_own(user)
+
+
+@router.put("/me/location", summary="Set or change your default location")
+async def set_my_location(
+    payload: LocationIn, user: CurrentUser, session: DbSession
+) -> OwnLocationOut:
+    """Prefills the listing and need forms, and anchors the nearby sort.
+
+    The body carries a PLACE NAME. Coordinates are resolved server-side to
+    the centre of that city or district (services/geo.py), so the database
+    never learns where anybody actually lives (Rule B).
+
+    An empty city clears the location rather than failing: withdrawing it has
+    to be as easy as giving it.
+    """
+    geo.apply_to(user, payload.model_dump())
+    await session.commit()
+    return OwnLocationOut.of_own(user)

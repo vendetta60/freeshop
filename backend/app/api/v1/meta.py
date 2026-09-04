@@ -11,7 +11,8 @@ from app.config import get_settings
 from app.core.logging import get_logger
 from app.db import session as db
 from app.schemas.catalogue import ContactOut
-from app.services import settings_service
+from app.schemas.location import PlaceOut, PlacesOut
+from app.services import geo, settings_service
 
 router = APIRouter(tags=["meta"])
 
@@ -96,3 +97,35 @@ async def seller_contact(session: DbSession, lang: Lang) -> ContactOut:
     without a deploy (plan.md 7.3), and so a key that has never been written
     still resolves to its default rather than to a blank."""
     return await settings_service.contact(session, lang)
+
+
+@router.get("/meta/places", summary="Cities and districts the location picker offers")
+async def places(response: Response) -> PlacesOut:
+    """The gazetteer, as options.
+
+    Public and static, so it is cached hard: it changes when the source table
+    in `services/geo_data.py` changes, which is a deploy, not a request
+    (FreeShop_Prompt 1).
+    """
+    response.headers["Cache-Control"] = "public, max-age=86400"
+    cities = geo.known_cities()
+    return PlacesOut(
+        cities=[PlaceOut(name=c["name"], region=c["region"]) for c in cities],
+        districts={
+            city["name"]: districts
+            for city in cities
+            if (districts := geo.districts_of(city["name"]))
+        },
+    )
+
+
+@router.get("/meta/radius-options", summary="Radius choices for the nearby filter")
+async def radius_options(response: Response) -> dict[str, list[int]]:
+    """Served rather than hardcoded in the client so the two cannot drift.
+
+    `null` - "All" - is not in the list: it is the absence of a radius, and
+    encoding it as a magic number would put a 0 or a -1 into a query string
+    that means something else.
+    """
+    response.headers["Cache-Control"] = "public, max-age=86400"
+    return {"radius_km": list(geo.RADIUS_OPTIONS)}
