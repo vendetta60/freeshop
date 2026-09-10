@@ -20,6 +20,22 @@ import { formatPrice } from '@/lib/utils/format';
 /** A local sample: the kitchen sink must render without a server, and its
  *  job is to exercise geometry, not to be real data. Ratios are deliberately
  *  extreme so the `object-fit: contain` rule is visible. */
+/** The location, transfer type and loan state every card now carries. A
+ *  shared constant, so adding a field to the DTO is one edit here rather
+ *  than four. */
+const SAMPLE_PLACE = {
+  location: {
+    country: 'AZ',
+    region: 'Lənkəran',
+    city: 'Lənkəran',
+    district: null,
+    label: 'Lənkəran',
+    distance_km: 3.4,
+  },
+  transfer_type: 'giveaway',
+  loan_state: 'available',
+} as const;
+
 const SAMPLE: ProductSummary[] = [
   {
     id: 1,
@@ -36,6 +52,7 @@ const SAMPLE: ProductSummary[] = [
     image_width: 1200,
     image_height: 800,
     is_featured: false,
+    ...SAMPLE_PLACE,
   },
   {
     id: 2,
@@ -52,6 +69,7 @@ const SAMPLE: ProductSummary[] = [
     image_width: 800,
     image_height: 1200,
     is_featured: false,
+    ...SAMPLE_PLACE,
   },
   {
     id: 3,
@@ -68,6 +86,7 @@ const SAMPLE: ProductSummary[] = [
     image_width: 1000,
     image_height: 1000,
     is_featured: false,
+    ...SAMPLE_PLACE,
   },
   {
     id: 4,
@@ -83,6 +102,7 @@ const SAMPLE: ProductSummary[] = [
     image_width: null,
     image_height: null,
     is_featured: false,
+    ...SAMPLE_PLACE,
   },
 ];
 

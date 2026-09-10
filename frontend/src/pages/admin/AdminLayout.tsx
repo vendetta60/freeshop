@@ -2,7 +2,9 @@ import {
   BarChart3,
   ClipboardCheck,
   FolderTree,
+  HandHeart,
   Inbox,
+  LifeBuoy,
   Package,
   Settings,
   Users,
@@ -18,6 +20,8 @@ import { useUiStore } from '@/stores/uiStore';
 const LINKS = [
   { to: '/admin', end: true, labelKey: 'admin.overview', icon: BarChart3 },
   { to: '/admin/queue', end: false, labelKey: 'admin.queue', icon: ClipboardCheck },
+  { to: '/admin/needs', end: false, labelKey: 'admin.needs.nav', icon: HandHeart },
+  { to: '/admin/aid', end: false, labelKey: 'admin.aid.nav', icon: LifeBuoy },
   { to: '/admin/products', end: false, labelKey: 'admin.products', icon: Package },
   { to: '/admin/categories', end: false, labelKey: 'admin.categories', icon: FolderTree },
   { to: '/admin/requests', end: false, labelKey: 'admin.requests', icon: Inbox },

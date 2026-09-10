@@ -1,4 +1,4 @@
-import { Home, LayoutGrid, Search, ShoppingBag, User } from 'lucide-react';
+import { HandHeart, Home, LayoutGrid, Search, ShoppingBag } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
 
 import { useCartCount } from '@/lib/hooks/useCart';
@@ -12,12 +12,21 @@ import { useUiStore } from '@/stores/uiStore';
  * Search and Cart are actions rather than routes: they open the palette and
  * the drawer respectively, which is what makes them feel native.
  */
+/**
+ * Five tabs, and no more - a sixth would shrink every label past legibility
+ * on a small phone.
+ *
+ * "Ehtiyaclar" takes the slot that used to be a second route to the contact
+ * page, which the footer and the account menu both already reach. The needs
+ * board is half the product now (FreeShop_Prompt 4) and had nowhere to be
+ * found from a phone.
+ */
 const TABS = [
   { key: 'home', labelKey: 'nav.home', Icon: Home, to: '/' },
   { key: 'catalogue', labelKey: 'nav.catalogue', Icon: LayoutGrid, to: '/products' },
+  { key: 'needs', labelKey: 'nav.needs', Icon: HandHeart, to: '/needs' },
   { key: 'search', labelKey: 'nav.searchTab', Icon: Search, action: 'palette' as const },
   { key: 'cart', labelKey: 'nav.cartShort', Icon: ShoppingBag, action: 'cart' as const },
-  { key: 'profile', labelKey: 'nav.contact', Icon: User, to: '/contact' },
 ];
 
 export function TabBar() {

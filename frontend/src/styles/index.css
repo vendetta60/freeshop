@@ -13,6 +13,7 @@
 @import './overlays.css';
 @import './auth.css';
 @import './admin.css';
+@import './community.css';
 
 /* Expose the design tokens to Tailwind utilities so `bg-surface`,
    `text-muted`, `rounded-lg` and friends resolve to the same variables the

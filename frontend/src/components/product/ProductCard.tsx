@@ -1,6 +1,7 @@
 import { Link } from 'react-router';
 
-import { StockPill } from '@/components/ui/Badge';
+import { PlaceLine } from '@/components/community/PlaceLine';
+import { LoanBadge, StockPill } from '@/components/ui/Badge';
 import { Price } from '@/components/ui/Price';
 import type { ProductCard as ProductSummary } from '@/lib/api/catalogue';
 import { useT } from '@/lib/i18n';
@@ -57,6 +58,12 @@ export function ProductCard({
 
       <div className="product-card__body">
         <h3 className="product-card__title">{title}</h3>
+
+        {/* Where it is, before the price. Someone deciding whether to ask for
+            a wardrobe needs to know it is across town before they care what
+            it costs (FreeShop_Prompt 1). */}
+        <PlaceLine location={product.location} className="product-card__place" />
+
         <div className="product-card__meta">
           <span className="product-card__price">
             {old_price_minor ? (
@@ -66,7 +73,10 @@ export function ProductCard({
             ) : null}
             <Price minor={price_minor} currency={currency} />
           </span>
-          <StockPill status={stock_status} />
+          <span className="product-card__pills">
+            <LoanBadge transferType={product.transfer_type} state={product.loan_state} />
+            <StockPill status={stock_status} />
+          </span>
         </div>
       </div>
     </Link>
