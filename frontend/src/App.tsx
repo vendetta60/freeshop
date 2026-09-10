@@ -23,6 +23,22 @@ const OfferPage = lazy(() => import('@/pages/account/OfferPage'));
 const MyListingsPage = lazy(() => import('@/pages/account/MyListingsPage'));
 
 /**
+ * The community layer (FreeShop_Prompt 3-8). Lazy for the same reason as
+ * everything else: a visitor who only browses the catalogue should never
+ * download the message composer.
+ */
+const NeedsPage = lazy(() => import('@/pages/public/NeedsPage'));
+const NeedDetailPage = lazy(() => import('@/pages/public/NeedDetailPage'));
+const NeedFormPage = lazy(() => import('@/pages/account/NeedFormPage'));
+const MyNeedsPage = lazy(() => import('@/pages/account/MyNeedsPage'));
+const MessagesPage = lazy(() => import('@/pages/account/MessagesPage'));
+const ConversationPage = lazy(() => import('@/pages/account/ConversationPage'));
+const LoansPage = lazy(() => import('@/pages/account/LoansPage'));
+const AidPage = lazy(() => import('@/pages/public/AidPage'));
+const AidDetailPage = lazy(() => import('@/pages/public/AidDetailPage'));
+const AidCommitmentsPage = lazy(() => import('@/pages/account/AidCommitmentsPage'));
+
+/**
  * The admin panel is a separate lazy chunk per page, not one bundle: a
  * visitor who never signs in as an admin should never download the product
  * form, and the shell alone is what the guard needs (plan.md 11).
@@ -36,6 +52,9 @@ const AdminCategories = lazy(() => import('@/pages/admin/AdminCategories'));
 const AdminRequests = lazy(() => import('@/pages/admin/AdminRequests'));
 const AdminUsers = lazy(() => import('@/pages/admin/AdminUsers'));
 const AdminSettings = lazy(() => import('@/pages/admin/AdminSettings'));
+const AdminNeeds = lazy(() => import('@/pages/admin/AdminNeeds'));
+const AdminAid = lazy(() => import('@/pages/admin/AdminAid'));
+const AdminAidCase = lazy(() => import('@/pages/admin/AdminAidCase'));
 
 /**
  * Development-only routes. `import.meta.env.DEV` is statically replaced at
@@ -65,6 +84,22 @@ export function App() {
             <Route path="profile/listings" element={page(<MyListingsPage />)} />
             <Route path="offer" element={page(<OfferPage />)} />
 
+            {/* `needs/new` is declared BEFORE `needs/:id` so the literal path
+                is not swallowed by the parameter. */}
+            <Route path="needs" element={page(<NeedsPage />)} />
+            <Route path="needs/new" element={page(<NeedFormPage />)} />
+            <Route path="needs/:id" element={page(<NeedDetailPage />)} />
+            <Route path="profile/needs" element={page(<MyNeedsPage />)} />
+
+            <Route path="messages" element={page(<MessagesPage />)} />
+            <Route path="messages/:id" element={page(<ConversationPage />)} />
+
+            <Route path="profile/loans" element={page(<LoansPage />)} />
+
+            <Route path="aid" element={page(<AidPage />)} />
+            <Route path="aid/:slug" element={page(<AidDetailPage />)} />
+            <Route path="profile/aid" element={page(<AidCommitmentsPage />)} />
+
             <Route path="admin" element={page(<AdminLayout />)}>
               <Route index element={page(<AdminDashboard />)} />
               <Route path="queue" element={page(<AdminQueue />)} />
@@ -74,6 +109,9 @@ export function App() {
               <Route path="requests" element={page(<AdminRequests />)} />
               <Route path="users" element={page(<AdminUsers />)} />
               <Route path="settings" element={page(<AdminSettings />)} />
+              <Route path="needs" element={page(<AdminNeeds />)} />
+              <Route path="aid" element={page(<AdminAid />)} />
+              <Route path="aid/:id" element={page(<AdminAidCase />)} />
             </Route>
             {KitchenSink && <Route path="dev/kitchen-sink" element={page(<KitchenSink />)} />}
             <Route path="*" element={page(<NotFoundPage />)} />

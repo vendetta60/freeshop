@@ -1,15 +1,19 @@
-import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Check, ShoppingBag } from 'lucide-react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { ArrowLeft, Check, Loader2, MessageCircle, ShoppingBag, Users } from 'lucide-react';
 import { useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
 
+import { LoanRequestPanel } from '@/components/community/LoanRequestPanel';
+import { PlaceLine } from '@/components/community/PlaceLine';
+import { NeedCard } from '@/components/community/NeedCard';
 import { ProductCard } from '@/components/product/ProductCard';
-import { Badge, StockPill } from '@/components/ui/Badge';
+import { Badge, LoanBadge, StockPill } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Price } from '@/components/ui/Price';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/States';
-import { catalogueApi, catalogueKeys } from '@/lib/api/catalogue';
+import { catalogueApi, catalogueKeys, listingApi, listingKeys } from '@/lib/api/catalogue';
+import { messagesApi } from '@/lib/api/community';
 import { useDocumentTitle } from '@/lib/hooks/useDocumentTitle';
 import { useT } from '@/lib/i18n';
 import { ApiError } from '@/lib/api/client';
@@ -17,16 +21,20 @@ import { formatPrice } from '@/lib/utils/format';
 import NotFoundPage from '@/pages/public/NotFoundPage';
 import { useAuthStore } from '@/stores/authStore';
 import { useCart } from '@/lib/hooks/useCart';
+import { toast } from '@/stores/toastStore';
 import { useUiStore } from '@/stores/uiStore';
 
 export default function ProductDetailPage() {
   const { slug = '' } = useParams();
   const { t, lang } = useT();
+  const navigate = useNavigate();
 
   const { add } = useCart();
   const openCart = useUiStore((s) => s.openCart);
   const requestSignIn = useUiStore((s) => s.requestSignIn);
-  const signedIn = useAuthStore((s) => s.user !== null);
+  const openAuth = useUiStore((s) => s.openAuth);
+  const user = useAuthStore((s) => s.user);
+  const signedIn = user !== null;
   const [justAdded, setJustAdded] = useState(false);
 
   const {
@@ -46,6 +54,24 @@ export default function ProductDetailPage() {
     queryKey: catalogueKeys.related(slug, lang),
     queryFn: ({ signal }) => catalogueApi.related(slug, lang, signal),
     enabled: Boolean(product),
+  });
+
+  // "Yaxınlıqda 4 nəfər bu tip əşya axtarır" (FreeShop_Prompt 6). Only for
+  // the person who OWNS the listing - the endpoint is signed-in only, and
+  // showing a giver who else wants their thing is the point of it.
+  const isOwner = Boolean(product && user && product.location);
+  const { data: matchingNeeds = [] } = useQuery({
+    queryKey: listingKeys.matchingNeeds(product?.id ?? 0, lang),
+    queryFn: ({ signal }) => listingApi.matchingNeeds(product?.id ?? 0, lang, signal),
+    enabled: Boolean(product) && signedIn && isOwner,
+  });
+
+  const startConversation = useMutation({
+    mutationFn: () => messagesApi.open('listing', product?.id ?? 0),
+    onSuccess: (conversation) => {
+      void navigate(`/messages/${conversation.id}`);
+    },
+    onError: () => toast.error(t('messages.openFailed')),
   });
 
   // The product name, once it has arrived. Until then the previous
@@ -124,8 +150,15 @@ export default function ProductDetailPage() {
         </div>
 
         <div className="detail__info">
-          <Badge tone="neutral">{product.category_name}</Badge>
+          <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap' }}>
+            <Badge tone="neutral">{product.category_name}</Badge>
+            <LoanBadge transferType={product.transfer_type} state={product.loan_state} />
+          </div>
           <h1>{product.title}</h1>
+
+          {/* Where it is, high on the page: whether a handover is practical
+              is the first question, not the last (Rule B). */}
+          <PlaceLine location={product.location} />
 
           <p className="detail__price tabular">
             {product.old_price_minor ? (
@@ -154,18 +187,61 @@ export default function ProductDetailPage() {
                 </>
               )}
             </Button>
-            <Button variant="secondary" size="lg">
-              <Link to="/contact" style={{ color: 'inherit', textDecoration: 'none' }}>
-                {t('product.contactSeller')}
-              </Link>
-            </Button>
+            {/* Message the giver directly (FreeShop_Prompt 3). The server
+                resolves who that reaches from the listing - the client never
+                sends a user id. */}
+            {signedIn ? (
+              <Button
+                variant="secondary"
+                size="lg"
+                disabled={startConversation.isPending}
+                onClick={() => startConversation.mutate()}
+              >
+                {startConversation.isPending ? (
+                  <Loader2 size={17} className="spin" aria-hidden="true" />
+                ) : (
+                  <MessageCircle size={17} aria-hidden="true" />
+                )}
+                {t('product.messageGiver')}
+              </Button>
+            ) : (
+              <Button variant="secondary" size="lg" onClick={openAuth}>
+                <MessageCircle size={17} aria-hidden="true" />
+                {t('product.messageGiver')}
+              </Button>
+            )}
           </div>
+
+          {/* Aggregate only - never who they are (Rule F). */}
+          {product.open_request_count > 0 && (
+            <p className="subtle" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <Users size={14} aria-hidden="true" />
+              {t('product.requestCount', { count: product.open_request_count })}
+            </p>
+          )}
 
           <p aria-live="polite" className="visually-hidden">
             {justAdded ? t('product.added') : ''}
           </p>
         </div>
       </div>
+
+      <LoanRequestPanel product={product} />
+
+      {matchingNeeds.length > 0 && (
+        <section style={{ marginTop: '2rem' }}>
+          <div className="section-head">
+            <h2 style={{ fontSize: '1rem' }}>
+              {t('needs.matchingCount', { count: matchingNeeds.length })}
+            </h2>
+          </div>
+          <div style={{ display: 'grid', gap: '0.75rem' }}>
+            {matchingNeeds.map((match) => (
+              <NeedCard key={match.need.id} need={match.need} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {product.images.length > 1 && (
         <div className="thumb-strip" aria-label={t('product.gallery')}>

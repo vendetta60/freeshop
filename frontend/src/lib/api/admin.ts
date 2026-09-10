@@ -227,3 +227,87 @@ export const adminKeys = {
   stats: () => ['admin', 'stats'] as const,
   recent: () => ['admin', 'recent-requests'] as const,
 };
+
+// ---------------------------------------------------------------------------
+// Needs moderation and emergency aid (FreeShop_Prompt 11)
+//
+// Appended rather than split into a second admin module: the panel is one
+// surface, `adminKeys` is one namespace, and a second file would only make
+// invalidation span two of them.
+// ---------------------------------------------------------------------------
+import type {
+  AdminAidCase,
+  AdminCommitment,
+  AdminNeed,
+  AidItem,
+  CaseStatus,
+  CommitmentStatus,
+  ItemPriority,
+} from '@/lib/api/community';
+
+export type AidCasePayload = {
+  title_az: string;
+  title_en?: string | null;
+  description_az?: string;
+  description_en?: string | null;
+  beneficiary_display_name?: string | null;
+  /** Admin-only, and the only field in the app with that property. */
+  verification_note_internal?: string | null;
+  city?: string | null;
+  district?: string | null;
+};
+
+export type AidItemPayload = {
+  title_az: string;
+  title_en?: string | null;
+  category_id?: number | null;
+  quantity_needed?: number;
+  priority?: ItemPriority;
+  notes?: string | null;
+};
+
+export const adminCommunityApi = {
+  needs: (params: { status?: string; page?: number; per_page?: number }, signal?: AbortSignal) =>
+    request<Paged<AdminNeed>>(`/admin/needs${qs(params)}`, { signal }),
+
+  moderateNeed: (id: number, body: { status: 'approved' | 'rejected'; note?: string }) =>
+    request<AdminNeed>(`/admin/needs/${id}/moderate`, { method: 'POST', body }),
+
+  aidCases: (signal?: AbortSignal) => request<AdminAidCase[]>('/admin/aid/cases', { signal }),
+
+  aidCase: (id: number, signal?: AbortSignal) =>
+    request<AdminAidCase>(`/admin/aid/cases/${id}`, { signal }),
+
+  createCase: (body: AidCasePayload) =>
+    request<AdminAidCase>('/admin/aid/cases', { method: 'POST', body }),
+
+  updateCase: (id: number, body: Partial<AidCasePayload>) =>
+    request<AdminAidCase>(`/admin/aid/cases/${id}`, { method: 'PATCH', body }),
+
+  setCaseStatus: (id: number, status: CaseStatus) =>
+    request<AdminAidCase>(`/admin/aid/cases/${id}/status`, { method: 'POST', body: { status } }),
+
+  addItem: (caseId: number, body: AidItemPayload) =>
+    request<AidItem>(`/admin/aid/cases/${caseId}/items`, { method: 'POST', body }),
+
+  updateItem: (itemId: number, body: Partial<AidItemPayload>) =>
+    request<AidItem>(`/admin/aid/items/${itemId}`, { method: 'PATCH', body }),
+
+  deleteItem: (itemId: number) => request<void>(`/admin/aid/items/${itemId}`, { method: 'DELETE' }),
+
+  commitments: (caseId: number, signal?: AbortSignal) =>
+    request<AdminCommitment[]>(`/admin/aid/cases/${caseId}/commitments`, { signal }),
+
+  setCommitmentStatus: (commitmentId: number, status: CommitmentStatus) =>
+    request<AdminCommitment>(`/admin/aid/commitments/${commitmentId}/status`, {
+      method: 'POST',
+      body: { status },
+    }),
+};
+
+export const adminCommunityKeys = {
+  needs: (params: Record<string, unknown>) => ['admin', 'needs', params] as const,
+  aidCases: () => ['admin', 'aid', 'cases'] as const,
+  aidCase: (id: number) => ['admin', 'aid', 'case', id] as const,
+  commitments: (caseId: number) => ['admin', 'aid', 'commitments', caseId] as const,
+};

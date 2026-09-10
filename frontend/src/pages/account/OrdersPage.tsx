@@ -1,8 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { Package } from 'lucide-react';
+import { useState } from 'react';
 import { Link } from 'react-router';
 
 import { RequestCard } from '@/components/account/RequestCard';
+import { KeepAsNeedPrompt } from '@/components/community/KeepAsNeedPrompt';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/States';
@@ -31,6 +33,11 @@ export default function OrdersPage() {
     enabled: user !== null,
   });
 
+  // Dismissals are per session on purpose: remembering "no thanks" forever
+  // would be a column and a migration to avoid asking a question that costs
+  // nothing to ask again (components/community/KeepAsNeedPrompt.tsx).
+  const [dismissed, setDismissed] = useState<number[]>([]);
+
   useDocumentTitle(t('orders.title'));
   if (loading) return null;
 
@@ -53,6 +60,15 @@ export default function OrdersPage() {
       <header className="section-head">
         <h1 style={{ fontSize: '1.25rem' }}>{t('orders.title')}</h1>
       </header>
+
+      {/* "Bu əşyanı ala bilmədiniz" - the consent step that turns an
+          unsuccessful request into visible local demand (Rule C). Above the
+          history, because it is the only thing on this page that asks for a
+          decision. */}
+      <KeepAsNeedPrompt
+        dismissed={dismissed}
+        onDismiss={(id) => setDismissed((current) => [...current, id])}
+      />
 
       {requests.isError && <ErrorState onRetry={() => void requests.refetch()} />}
 

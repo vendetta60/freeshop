@@ -2,7 +2,9 @@ import { useQuery } from '@tanstack/react-query';
 import { Gift } from 'lucide-react';
 import { Link } from 'react-router';
 
-import { Badge } from '@/components/ui/Badge';
+import { HandoverPanel } from '@/components/community/HandoverPanel';
+import { PlaceLine } from '@/components/community/PlaceLine';
+import { Badge, LoanBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Price } from '@/components/ui/Price';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -107,10 +109,26 @@ export default function MyListingsPage() {
                 <span style={{ fontWeight: 500 }}>{listing.title}</span>
               )}
               <Badge tone={TONE[listing.status]}>{t(`moderation.${listing.status}`)}</Badge>
+              <LoanBadge transferType={listing.transfer_type} />
               {listing.is_deleted && <Badge tone="warning">{t('listings.removed')}</Badge>}
             </div>
 
             <p className="subtle" style={{ fontSize: '0.8125rem' }}>
+              {listing.location_label && (
+                <>
+                  <PlaceLine
+                    location={{
+                      country: 'AZ',
+                      region: null,
+                      city: listing.location_label,
+                      district: null,
+                      label: listing.location_label,
+                      distance_km: null,
+                    }}
+                  />
+                  {' · '}
+                </>
+              )}
               {listing.category_name} · {formatDate(listing.created_at, lang)}
             </p>
 
@@ -124,6 +142,13 @@ export default function MyListingsPage() {
                 a rebuke and costs the next donation. */}
             {listing.status === 'rejected' && listing.moderation_note && (
               <p className="listing-row__note">{listing.moderation_note}</p>
+            )}
+
+            {/* Several people asked; one can have it. Choosing here is what
+                turns the rest into recorded demand rather than nothing
+                (FreeShop_Prompt 5, Rule C). */}
+            {listing.open_request_count > 0 && (
+              <HandoverPanel productId={listing.id} openRequestCount={listing.open_request_count} />
             )}
           </div>
 

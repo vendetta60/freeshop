@@ -1,11 +1,14 @@
-import { Loader2, ShieldCheck } from 'lucide-react';
+import { Loader2, MapPin, ShieldCheck } from 'lucide-react';
 import { useRef, useState } from 'react';
+import { Link } from 'react-router';
 
+import { LocationPicker } from '@/components/community/LocationPicker';
 import { Button } from '@/components/ui/Button';
 import { SelectField, TextField } from '@/components/ui/Field';
 import { EmptyState } from '@/components/ui/States';
 import { authApi, devApi } from '@/lib/api/auth';
 import { ApiError, reasonOf } from '@/lib/api/client';
+import { locationApi } from '@/lib/api/community';
 import { useDocumentTitle } from '@/lib/hooks/useDocumentTitle';
 import { useT } from '@/lib/i18n';
 import { initialsOf, useAuthStore } from '@/stores/authStore';
@@ -39,6 +42,12 @@ export default function ProfilePage() {
 
   const avatarInput = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+
+  const [place, setPlace] = useState({
+    city: user?.location_city ?? '',
+    district: '',
+  });
+  const [savingPlace, setSavingPlace] = useState(false);
 
   useDocumentTitle(t('profile.title'));
   if (loading) return null;
@@ -121,6 +130,22 @@ export default function ProfilePage() {
       setPhoneError(phoneMessage(err));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const saveLocation = async () => {
+    setSavingPlace(true);
+    try {
+      await locationApi.save({ city: place.city || null, district: place.district || null });
+      // Re-read the user rather than patching the store from the location
+      // response: `has_location` is the server's judgement about whether the
+      // gazetteer placed you, and guessing it here could disagree.
+      setUser(await authApi.me());
+      toast.success(t('location.saved'));
+    } catch {
+      toast.error(t('location.saveFailed'));
+    } finally {
+      setSavingPlace(false);
     }
   };
 
@@ -213,6 +238,44 @@ export default function ProfilePage() {
           {t('common.save')}
         </Button>
       </div>
+
+      <div className="card admin__form">
+        <h2 style={{ fontSize: '1rem' }}>
+          <MapPin size={16} aria-hidden="true" style={{ verticalAlign: '-2px' }} />{' '}
+          {t('location.section')}
+        </h2>
+        <p className="muted" style={{ fontSize: '0.8125rem' }}>
+          {/* Says plainly what is stored, because a location field with no
+              explanation is one people decline to fill in. */}
+          {t('location.privacyNote')}
+        </p>
+
+        {user.location_label && (
+          <p className="subtle">{t('location.current', { place: user.location_label })}</p>
+        )}
+
+        <LocationPicker city={place.city} district={place.district} onChange={setPlace} />
+
+        <Button
+          variant="primary"
+          size="sm"
+          disabled={savingPlace}
+          onClick={() => void saveLocation()}
+        >
+          {savingPlace && <Loader2 size={15} className="spin" aria-hidden="true" />}
+          {t('common.save')}
+        </Button>
+      </div>
+
+      {/* One place to reach everything this account owns (FreeShop_Prompt 10). */}
+      <nav className="card profile-links" aria-label={t('profile.title')}>
+        <Link to="/profile/listings">{t('listings.title')}</Link>
+        <Link to="/profile/needs">{t('needs.mine')}</Link>
+        <Link to="/profile/loans">{t('loan.title')}</Link>
+        <Link to="/messages">{t('messages.title')}</Link>
+        <Link to="/profile/aid">{t('aid.mine')}</Link>
+        <Link to="/profile/orders">{t('orders.title')}</Link>
+      </nav>
 
       <div className="card admin__form">
         <h2 style={{ fontSize: '1rem' }}>{t('profile.phoneSection')}</h2>

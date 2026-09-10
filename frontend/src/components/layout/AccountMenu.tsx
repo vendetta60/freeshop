@@ -1,9 +1,13 @@
 import {
   Gift,
+  HandHeart,
   LayoutDashboard,
+  LifeBuoy,
   LogIn,
   LogOut,
+  MessageCircle,
   Package,
+  Repeat,
   ShieldCheck,
   Tag,
   User,
@@ -13,6 +17,7 @@ import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 
 import { Button } from '@/components/ui/Button';
+import { useUnread } from '@/lib/hooks/useUnread';
 import { useT } from '@/lib/i18n';
 import { initialsOf, useAuthStore } from '@/stores/authStore';
 import { useUiStore } from '@/stores/uiStore';
@@ -36,6 +41,7 @@ export function AccountMenu() {
   const openAuth = useUiStore((s) => s.openAuth);
   const navigate = useNavigate();
   const ref = useRef<HTMLDivElement>(null);
+  const unread = useUnread();
 
   useEffect(() => {
     if (!open) return;
@@ -75,6 +81,12 @@ export function AccountMenu() {
           </span>
         ) : (
           <User size={16} aria-hidden="true" />
+        )}
+        {/* Reuses the cart's dot so the two badges are one visual idea. */}
+        {unread.total > 0 && (
+          <span className="cart-dot tabular" aria-hidden="true">
+            {unread.total}
+          </span>
         )}
       </Button>
 
@@ -137,11 +149,66 @@ export function AccountMenu() {
                 className="account-menu__item"
                 onClick={() => {
                   close();
+                  void navigate('/messages');
+                }}
+              >
+                <MessageCircle size={15} aria-hidden="true" />
+                {t('messages.title')}
+                {unread.conversations > 0 && (
+                  <span className="account-menu__badge tabular">{unread.conversations}</span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                role="menuitem"
+                className="account-menu__item"
+                onClick={() => {
+                  close();
                   void navigate('/profile/listings');
                 }}
               >
                 <Tag size={15} aria-hidden="true" />
                 {t('listings.nav')}
+              </button>
+
+              <button
+                type="button"
+                role="menuitem"
+                className="account-menu__item"
+                onClick={() => {
+                  close();
+                  void navigate('/profile/needs');
+                }}
+              >
+                <HandHeart size={15} aria-hidden="true" />
+                {t('needs.mine')}
+              </button>
+
+              <button
+                type="button"
+                role="menuitem"
+                className="account-menu__item"
+                onClick={() => {
+                  close();
+                  void navigate('/profile/loans');
+                }}
+              >
+                <Repeat size={15} aria-hidden="true" />
+                {t('loan.title')}
+              </button>
+
+              <button
+                type="button"
+                role="menuitem"
+                className="account-menu__item"
+                onClick={() => {
+                  close();
+                  void navigate('/profile/aid');
+                }}
+              >
+                <LifeBuoy size={15} aria-hidden="true" />
+                {t('aid.mine')}
               </button>
 
               <button

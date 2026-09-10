@@ -2,20 +2,26 @@ import { useQuery } from '@tanstack/react-query';
 import { SlidersHorizontal } from 'lucide-react';
 import { useSearchParams } from 'react-router';
 
+import { NearbyUnavailableNote, RadiusSelector } from '@/components/community/DiscoveryControls';
 import { ProductCard } from '@/components/product/ProductCard';
 import { Chip } from '@/components/ui/Chip';
 import { ProductCardSkeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/States';
-import { catalogueApi, catalogueKeys, type SortKey } from '@/lib/api/catalogue';
+import { catalogueApi, catalogueKeys, SORT_OPTIONS, type SortKey } from '@/lib/api/catalogue';
 import { useDocumentTitle } from '@/lib/hooks/useDocumentTitle';
 import { useT } from '@/lib/i18n';
 import { useCategories } from '@/lib/hooks/useCategories';
 
-const SORTS: { key: SortKey; labelKey: string }[] = [
-  { key: 'newest', labelKey: 'catalogue.sort.newest' },
-  { key: 'price_asc', labelKey: 'catalogue.sort.priceAsc' },
-  { key: 'price_desc', labelKey: 'catalogue.sort.priceDesc' },
-];
+/**
+ * Sort options, ordered by how a visitor thinks rather than by when each was
+ * added: where it is, then how new, then how wanted, then price.
+ * `SORT_OPTIONS` is shared with the other discovery surfaces so they cannot
+ * disagree about what exists (components/community/DiscoveryControls.tsx).
+ */
+const SORTS: { key: SortKey; labelKey: string }[] = SORT_OPTIONS.map((key) => ({
+  key,
+  labelKey: `sort.${key}`,
+}));
 
 /**
  * Catalogue.
@@ -31,6 +37,9 @@ export default function ProductsPage() {
   const category = params.get('category') ?? '';
   const sort = (params.get('sort') as SortKey | null) ?? 'newest';
   const inStockOnly = params.get('stock') === '1';
+  const loansOnly = params.get('transfer_type') === 'loan';
+  const radiusParam = params.get('radius_km');
+  const radiusKm = radiusParam ? Number(radiusParam) : null;
   const q = params.get('q') ?? '';
 
   const { flat: categories } = useCategories();
@@ -40,6 +49,12 @@ export default function ProductsPage() {
     category: category || undefined,
     sort,
     stock: inStockOnly ? ('available' as const) : undefined,
+    transfer_type: loansOnly ? ('loan' as const) : undefined,
+    // No lat/lng from the client, ever. The server measures from the saved
+    // location of whoever is signed in (FreeShop_Prompt 2, Rule B), so a
+    // radius with nobody signed in simply returns everything - which the
+    // note below explains rather than leaving as a mystery.
+    radius_km: radiusKm ?? undefined,
     per_page: 24,
   };
 
@@ -122,7 +137,25 @@ export default function ProductsPage() {
         >
           {t('catalogue.inStockOnly')}
         </Chip>
+        <Chip
+          active={loansOnly}
+          onClick={() => {
+            update('transfer_type', loansOnly ? null : 'loan');
+          }}
+        >
+          {t('loan.onlyLoans')}
+        </Chip>
+        <RadiusSelector
+          value={radiusKm}
+          onChange={(next) => {
+            update('radius_km', next === null ? null : String(next));
+          }}
+        />
       </div>
+
+      {/* Driven by what the SERVER did, not by what we asked for: the note
+          can then never contradict the list underneath it. */}
+      {sort === 'nearby' && <NearbyUnavailableNote appliedSort={data?.applied_sort} />}
 
       {isError && (
         <ErrorState

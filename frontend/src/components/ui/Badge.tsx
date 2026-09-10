@@ -31,3 +31,31 @@ export function StockPill({ status }: { status: StockStatus }) {
   if (status === 'available') return null;
   return <Badge tone="neutral">{t(`stock.${status}`)}</Badge>;
 }
+
+export type TransferType = 'giveaway' | 'loan';
+export type LoanListingState = 'available' | 'reserved' | 'borrowed';
+
+/**
+ * "Müvəqqəti" - this is lent, not given (FreeShop_Prompt 7).
+ *
+ * Follows the same rule as `StockPill`: a give-away renders NOTHING, because
+ * it is the norm on this board and a badge on every card is noise. Only the
+ * exception is worth a pixel.
+ *
+ * When the item is currently out with somebody, the badge says so instead -
+ * one slot, the most useful fact in it.
+ */
+export function LoanBadge({
+  transferType,
+  state = 'available',
+}: {
+  transferType: TransferType;
+  state?: LoanListingState;
+}) {
+  const { t } = useT();
+  if (transferType !== 'loan') return null;
+
+  if (state === 'borrowed') return <Badge tone="warning">{t('loan.state.borrowed')}</Badge>;
+  if (state === 'reserved') return <Badge tone="neutral">{t('loan.state.reserved')}</Badge>;
+  return <Badge tone="accent">{t('loan.badge')}</Badge>;
+}

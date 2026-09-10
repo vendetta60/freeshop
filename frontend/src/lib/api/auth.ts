@@ -9,6 +9,12 @@ export type User = {
   avatar_url: string | null;
   preferred_lang: string;
   role: 'admin' | 'user';
+  /** The saved default location, as a LABEL. Coordinates are never sent. */
+  location_label: string | null;
+  location_city: string | null;
+  /** A label alone is not enough to sort by distance - the gazetteer has to
+   *  have recognised the place. This is what the nearby sort depends on. */
+  has_location: boolean;
 };
 
 export type Session = {

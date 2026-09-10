@@ -98,3 +98,16 @@ export function formatDate(iso: string, lang: Lang = 'az'): string {
 
   return `${date.getDate()} ${AZ_MONTHS[date.getMonth()]} ${date.getFullYear()}`;
 }
+
+/**
+ * "3,4 km" in AZ, "3.4 km" in EN.
+ *
+ * The server has already rounded (one decimal below 10 km, whole kilometres
+ * above) - deliberately, so a distance cannot be used to triangulate the
+ * thing it measures. This only puts the local decimal separator on it and
+ * never re-rounds, because rounding twice is how 9,96 becomes 10.
+ */
+export function formatDistance(km: number, lang: Lang = 'az'): string {
+  const text = Number.isInteger(km) ? String(km) : km.toFixed(1);
+  return `${lang === 'az' ? text.replace('.', ',') : text} km`;
+}

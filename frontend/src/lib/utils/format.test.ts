@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatDate, formatNumber, formatPrice } from './format';
+import { formatDate, formatDistance, formatNumber, formatPrice } from './format';
 
 const NBSP = ' ';
 
@@ -70,5 +70,18 @@ describe('formatDate', () => {
 
   it('returns an empty string rather than "Invalid Date"', () => {
     expect(formatDate('not-a-date')).toBe('');
+  });
+});
+
+describe('formatDistance', () => {
+  it('uses a comma in AZ and a point in EN', () => {
+    expect(formatDistance(3.4, 'az')).toBe('3,4 km');
+    expect(formatDistance(3.4, 'en')).toBe('3.4 km');
+  });
+
+  it('does not invent a decimal for a whole number', () => {
+    // The server sends whole kilometres above 10; showing "204,0 km" would
+    // claim a precision it deliberately withheld.
+    expect(formatDistance(204, 'az')).toBe('204 km');
   });
 });

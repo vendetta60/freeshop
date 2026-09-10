@@ -3,6 +3,7 @@ import { Check, Gift, ImagePlus, Loader2, ShieldAlert, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 
+import { LocationPicker } from '@/components/community/LocationPicker';
 import { Button } from '@/components/ui/Button';
 import { CheckboxField, SelectField, TextAreaField, TextField } from '@/components/ui/Field';
 import { EmptyState } from '@/components/ui/States';
@@ -45,6 +46,16 @@ export default function OfferPage() {
   const [categoryId, setCategoryId] = useState('');
   const [isFree, setIsFree] = useState(true);
   const [price, setPrice] = useState('');
+
+  // Prefilled from the giver's saved location and editable, because most
+  // things are handed over where the giver lives and some are not
+  // (FreeShop_Prompt 1).
+  const [place, setPlace] = useState({ city: user?.location_city ?? '', district: '' });
+
+  // Give away or lend (FreeShop_Prompt 7). `giveaway` is the default because
+  // it is what this board has always been for.
+  const [transferType, setTransferType] = useState<'giveaway' | 'loan'>('giveaway');
+  const [maxDays, setMaxDays] = useState('7');
   const [errors, setErrors] = useState<Record<string, string | undefined>>({});
   const [done, setDone] = useState(false);
 
@@ -102,6 +113,10 @@ export default function OfferPage() {
         description_az: description.trim(),
         category_id: Number(categoryId),
         price_minor: isFree ? 0 : (toMinor(price) ?? 0),
+        city: place.city || null,
+        district: place.district || null,
+        transfer_type: transferType,
+        max_borrow_days: transferType === 'loan' ? Number(maxDays) || null : null,
       });
 
       if (photos.length > 0) {
@@ -326,6 +341,55 @@ export default function OfferPage() {
             }}
           />
         </div>
+
+        <LocationPicker
+          city={place.city}
+          district={place.district}
+          onChange={setPlace}
+          hint={t('location.listingHint')}
+        />
+
+        {/* Give away or lend. A radio pair rather than a checkbox: the two
+            are different promises, and "not permanent" is not what a person
+            reads on an unticked box. */}
+        <fieldset className="field">
+          <legend className="field__label">{t('offer.transferType')}</legend>
+          <div className="radio-row">
+            <label className="radio-option">
+              <input
+                type="radio"
+                name="transfer_type"
+                checked={transferType === 'giveaway'}
+                onChange={() => setTransferType('giveaway')}
+              />
+              <span>{t('offer.giveaway')}</span>
+            </label>
+            <label className="radio-option">
+              <input
+                type="radio"
+                name="transfer_type"
+                checked={transferType === 'loan'}
+                onChange={() => setTransferType('loan')}
+              />
+              <span>{t('offer.lend')}</span>
+            </label>
+          </div>
+          <p className="field__hint">
+            {transferType === 'loan' ? t('offer.lendHint') : t('offer.giveawayHint')}
+          </p>
+        </fieldset>
+
+        {transferType === 'loan' && (
+          <TextField
+            label={t('loan.maxDays')}
+            type="number"
+            min={1}
+            max={365}
+            value={maxDays}
+            hint={t('offer.maxDaysHint')}
+            onChange={(e) => setMaxDays(e.target.value)}
+          />
+        )}
 
         {/* Free is ticked by default: it is the reason the site exists. */}
         <CheckboxField
